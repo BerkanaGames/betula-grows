@@ -328,16 +328,29 @@ const NEED_ICON_TOP = 1;
 const NEED_BAR_TOP = 7;
 const NEED_BAR_LENGTH = 8;
 
-// Speed mode for testing: ?speed=720 makes a full life last 2 minutes.
-// It uses its own save, so tests never touch the real Betula.
+// Game time runs 720 times faster than real time: a full life lasts 2 minutes.
+// For testing, ?speed=N replaces it (?speed=1 is real time).
+// Other speeds use their own save, so tests never touch the real Betula.
+const NORMAL_SPEED = 720;
 const speed = readSpeed();
-const SAVE_KEY = speed === 1 ? "betula-grows" : "betula-grows-speed";
+const SAVE_KEY = speed === NORMAL_SPEED ? "betula-grows-v2" : "betula-grows-test";
+
+// Saves from when the normal speed was real time would end hundreds of lives at once.
+const OLD_SAVE_KEYS = ["betula-grows", "betula-grows-speed"];
 
 const REDRAW_INTERVAL = 1000;
 
 function readSpeed() {
   const value = Number(new URLSearchParams(window.location.search).get("speed"));
-  return Number.isFinite(value) && value > 0 ? value : 1;
+  return Number.isFinite(value) && value > 0 ? value : NORMAL_SPEED;
+}
+
+function removeOldSaves() {
+  try {
+    OLD_SAVE_KEYS.forEach((key) => localStorage.removeItem(key));
+  } catch (error) {
+    // Nothing to clean up if storage is not available.
+  }
 }
 
 function loadSave() {
@@ -467,6 +480,7 @@ function createNewSave(now) {
   };
 }
 
+removeOldSaves();
 let save = loadSave() || createNewSave(Date.now());
 // Saves from older versions of the game get the parts they are missing.
 if (!save.needs) {
