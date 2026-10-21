@@ -97,3 +97,78 @@ body {
   font-size: 1.5rem;
   line-height: 1;
 }
+
+/* Note that appears when Betula leaves a gift; tapping it closes it */
+.gift-message {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 2px solid var(--frame);
+  border-radius: 14px;
+  background: #fff7d6;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.gift-message[hidden] {
+  display: none;
+}
+
+/* The collection shelf: one slot per gift, kept forever */
+.shelf {
+  margin-top: 24px;
+  padding: 12px;
+  border-radius: 18px;
+  background: #fdfbf5;
+  box-shadow: 0 4px 0 var(--shell-shadow);
+}
+
+.shelf-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.shelf-slot {
+  position: relative;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--frame);
+}
+
+.shelf-slot.rare {
+  box-shadow: 0 0 0 3px #e2b84a;
+}
+
+.shelf-slot.missing .shelf-canvas {
+  opacity: 0.35;
+}
+
+.shelf-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+
+.shelf-count {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fdfbf5;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}

@@ -164,6 +164,146 @@ const NEED_ICONS = {
   ],
 };
 
+// The gifts Betula can leave at the end of a life, drawn as 8×8 sprites.
+const GIFTS = [
+  {
+    name: "pebble",
+    label: "a pebble",
+    rare: false,
+    sprite: [
+      "........",
+      "........",
+      "..####..",
+      ".#....#.",
+      "#..#...#",
+      "#......#",
+      ".######.",
+      "........",
+    ],
+  },
+  {
+    name: "acorn",
+    label: "an acorn",
+    rare: false,
+    sprite: [
+      "...##...",
+      ".######.",
+      "########",
+      ".#....#.",
+      ".#....#.",
+      "..#..#..",
+      "...##...",
+      "........",
+    ],
+  },
+  {
+    name: "feather",
+    label: "a feather",
+    rare: false,
+    sprite: [
+      "......##",
+      ".....#.#",
+      "....#.#.",
+      "...#.#..",
+      "..#.#...",
+      ".#.#....",
+      ".##.....",
+      "#.......",
+    ],
+  },
+  {
+    name: "mushroom",
+    label: "a mushroom",
+    rare: false,
+    sprite: [
+      "..####..",
+      ".#.##.#.",
+      "#......#",
+      "########",
+      "..#..#..",
+      "..#..#..",
+      "..####..",
+      "........",
+    ],
+  },
+  {
+    name: "flower",
+    label: "a flower",
+    rare: false,
+    sprite: [
+      "...#....",
+      "..#.#...",
+      ".#.#.#..",
+      "..#.#...",
+      "...#....",
+      "...#.#..",
+      "...##...",
+      "...#....",
+    ],
+  },
+  {
+    name: "snail-shell",
+    label: "a snail shell",
+    rare: true,
+    sprite: [
+      "..####..",
+      ".#....#.",
+      "#..##..#",
+      "#.#..#.#",
+      "#.#.##.#",
+      "#..#...#",
+      ".#....#.",
+      "..####..",
+    ],
+  },
+  {
+    name: "butterfly",
+    label: "a butterfly",
+    rare: true,
+    sprite: [
+      "........",
+      "##....##",
+      "#.#..#.#",
+      "#..##..#",
+      ".#.##.#.",
+      "#..##..#",
+      "#.#..#.#",
+      "##....##",
+    ],
+  },
+  {
+    name: "star",
+    label: "a star",
+    rare: true,
+    sprite: [
+      "...##...",
+      "...##...",
+      "########",
+      ".######.",
+      "..####..",
+      ".##..##.",
+      ".#....#.",
+      "........",
+    ],
+  },
+];
+
+// Shown on the shelf for gifts that have not been found yet.
+const UNKNOWN_GIFT_SPRITE = [
+  "..####..",
+  ".#....#.",
+  "......#.",
+  ".....#..",
+  "....#...",
+  "....#...",
+  "........",
+  "....#...",
+];
+
+// The chance of a rare gift grows with the care score (0 to 100).
+const RARE_CHANCE_NO_CARE = 0.05;
+const RARE_CHANCE_FULL_CARE = 0.5;
+
 const HOUR = 60 * 60 * 1000;
 const LIFE_DURATION = 24 * HOUR;
 
@@ -229,25 +369,69 @@ function getAge(save, now) {
   return (now - save.lifeStartTime) * speed;
 }
 
-// When a life is over, a new one starts right where the old one ended,
-// with all needs full. This also catches up on lives that ended while the game was closed.
-function startNewLivesIfNeeded(save, now) {
-  const livesEnded = Math.floor(getAge(save, now) / LIFE_DURATION);
-  if (livesEnded > 0) {
-    save.lifeStartTime += (livesEnded * LIFE_DURATION) / speed;
+// When a life is over, Betula leaves a gift and a new life starts right where
+// the old one ended, with all needs full. This also catches up on lives that
+// ended while the game was closed. Returns how many gifts were left.
+function finishEndedLives(save, now) {
+  let giftsLeft = 0;
+  while (getAge(save, now) >= LIFE_DURATION) {
+    const lifeEndTime = save.lifeStartTime + LIFE_DURATION / speed;
+    updateNeeds(save, lifeEndTime);
+
+    const gift = pickGift(getCareScore(save));
+    save.collection[gift.name] = (save.collection[gift.name] || 0) + 1;
+    save.newGifts.push(gift.name);
+    giftsLeft++;
+
+    save.lifeStartTime = lifeEndTime;
     save.needs = createFullNeeds();
-    save.lastUpdateTime = save.lifeStartTime;
+    save.lastUpdateTime = lifeEndTime;
+    save.careTotal = 0;
   }
+  return giftsLeft;
 }
 
-// Lowers every need by the game time passed since the last update.
+// Lowers every need by the game time passed since the last update,
+// and adds the care given in that time to the life's care total.
 function updateNeeds(save, now) {
-  const elapsed = (now - save.lastUpdateTime) * speed;
-  const drop = (elapsed / NEED_EMPTY_DURATION) * NEED_FULL;
+  const elapsed = Math.max(0, (now - save.lastUpdateTime) * speed);
+  const dropPerMillisecond = NEED_FULL / NEED_EMPTY_DURATION;
+  let careGiven = 0;
+
   NEEDS.forEach((need) => {
-    save.needs[need] = Math.max(0, save.needs[need] - drop);
+    const start = save.needs[need];
+    const timeUntilEmpty = start / dropPerMillisecond;
+    const end = Math.max(0, start - elapsed * dropPerMillisecond);
+
+    // The need drops in a straight line and then stays at 0,
+    // so the care given is the area under that line.
+    if (elapsed <= timeUntilEmpty) {
+      careGiven += ((start + end) / 2) * elapsed;
+    } else {
+      careGiven += (start / 2) * timeUntilEmpty;
+    }
+    save.needs[need] = end;
   });
+
+  save.careTotal += careGiven / NEEDS.length;
   save.lastUpdateTime = now;
+}
+
+// The average level of all needs over a whole life, from 0 to 100.
+function getCareScore(save) {
+  return Math.min(NEED_FULL, save.careTotal / LIFE_DURATION);
+}
+
+function pickGift(careScore) {
+  const care = careScore / NEED_FULL;
+  const rareChance = RARE_CHANCE_NO_CARE + (RARE_CHANCE_FULL_CARE - RARE_CHANCE_NO_CARE) * care;
+  const isRare = Math.random() < rareChance;
+  const pool = GIFTS.filter((gift) => gift.rare === isRare);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function findGift(name) {
+  return GIFTS.find((gift) => gift.name === name);
 }
 
 function refillNeed(need) {
@@ -275,10 +459,19 @@ let save = loadSave();
 if (!save) {
   save = { lifeStartTime: Date.now() };
 }
-// Saves from before the needs existed start with all needs full.
+// Saves from older versions of the game get the parts they are missing.
 if (!save.needs) {
   save.needs = createFullNeeds();
   save.lastUpdateTime = Date.now();
+}
+if (save.careTotal === undefined) {
+  save.careTotal = 0;
+}
+if (!save.collection) {
+  save.collection = {};
+}
+if (!save.newGifts) {
+  save.newGifts = [];
 }
 writeSave(save);
 
@@ -289,26 +482,26 @@ canvas.width = SCREEN_COLUMNS * CELL_SIZE;
 canvas.height = SCREEN_ROWS * CELL_SIZE;
 
 // Builds an empty grid of LCD pixels, all off.
-function createEmptyScreen() {
-  const screen = [];
-  for (let row = 0; row < SCREEN_ROWS; row++) {
-    screen.push(new Array(SCREEN_COLUMNS).fill(false));
+function createGrid(rows, columns) {
+  const grid = [];
+  for (let row = 0; row < rows; row++) {
+    grid.push(new Array(columns).fill(false));
   }
-  return screen;
+  return grid;
 }
 
-function isOnScreen(row, column) {
-  return row >= 0 && row < SCREEN_ROWS && column >= 0 && column < SCREEN_COLUMNS;
+function isInsideGrid(grid, row, column) {
+  return row >= 0 && row < grid.length && column >= 0 && column < grid[0].length;
 }
 
 // Turns on the pixels of a sprite, with its top-left corner at (left, top).
-function placeSprite(screen, sprite, left, top) {
+function placeSprite(grid, sprite, left, top) {
   sprite.forEach((line, spriteRow) => {
     [...line].forEach((character, spriteColumn) => {
       const row = top + spriteRow;
       const column = left + spriteColumn;
-      if (character === "#" && isOnScreen(row, column)) {
-        screen[row][column] = true;
+      if (character === "#" && isInsideGrid(grid, row, column)) {
+        grid[row][column] = true;
       }
     });
   });
@@ -333,31 +526,37 @@ function placeNeedBars(screen, needs) {
   });
 }
 
-// Paints every LCD pixel on the canvas: dark if on, a faint "ghost" if off.
-function drawScreen(screen) {
-  context.fillStyle = LCD_COLORS.background;
-  context.fillRect(0, 0, canvas.width, canvas.height);
+// Paints every LCD pixel on a canvas: dark if on, a faint "ghost" if off.
+function drawGrid(drawingContext, grid) {
+  const { canvas: target } = drawingContext;
+  drawingContext.fillStyle = LCD_COLORS.background;
+  drawingContext.fillRect(0, 0, target.width, target.height);
 
   const size = CELL_SIZE - CELL_GAP;
-  screen.forEach((cells, row) => {
+  grid.forEach((cells, row) => {
     cells.forEach((isOn, column) => {
-      context.fillStyle = isOn ? LCD_COLORS.pixelOn : LCD_COLORS.pixelOff;
-      context.fillRect(column * CELL_SIZE, row * CELL_SIZE, size, size);
+      drawingContext.fillStyle = isOn ? LCD_COLORS.pixelOn : LCD_COLORS.pixelOff;
+      drawingContext.fillRect(column * CELL_SIZE, row * CELL_SIZE, size, size);
     });
   });
 }
 
 function render() {
   const now = Date.now();
-  startNewLivesIfNeeded(save, now);
+  const giftsLeft = finishEndedLives(save, now);
   updateNeeds(save, now);
   writeSave(save);
+
+  if (giftsLeft > 0) {
+    renderShelf();
+    showGiftMessage();
+  }
 
   const stage = getStage(getAge(save, now));
   const sprite = SPRITES[stage.name];
   const mood = isSad(save.needs) ? "sad" : "happy";
   const face = FACES[stage.face.size][mood];
-  const screen = createEmptyScreen();
+  const screen = createGrid(SCREEN_ROWS, SCREEN_COLUMNS);
 
   // Center the sprite and let its last empty row sit on the ground line.
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
@@ -367,8 +566,71 @@ function render() {
   placeGround(screen);
   placeSprite(screen, sprite, left, top);
   placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
-  drawScreen(screen);
+  drawGrid(context, screen);
 }
+
+// Each shelf slot is a tiny LCD with a 1-pixel border around the 8×8 gift.
+const SHELF_SLOT_SIZE = 10;
+const shelf = document.getElementById("shelf");
+
+function renderShelf() {
+  shelf.replaceChildren();
+
+  GIFTS.forEach((gift) => {
+    const count = save.collection[gift.name] || 0;
+    const isFound = count > 0;
+
+    const slot = document.createElement("div");
+    slot.className = "shelf-slot";
+    slot.classList.toggle("rare", gift.rare && isFound);
+    slot.classList.toggle("missing", !isFound);
+    slot.setAttribute("role", "img");
+    slot.setAttribute("aria-label", isFound ? `${gift.name.replace("-", " ")}, ${count}` : "Not found yet");
+
+    const slotCanvas = document.createElement("canvas");
+    slotCanvas.className = "shelf-canvas";
+    slotCanvas.width = SHELF_SLOT_SIZE * CELL_SIZE;
+    slotCanvas.height = SHELF_SLOT_SIZE * CELL_SIZE;
+
+    const grid = createGrid(SHELF_SLOT_SIZE, SHELF_SLOT_SIZE);
+    placeSprite(grid, isFound ? gift.sprite : UNKNOWN_GIFT_SPRITE, 1, 1);
+    drawGrid(slotCanvas.getContext("2d"), grid);
+    slot.append(slotCanvas);
+
+    if (count > 1) {
+      const badge = document.createElement("span");
+      badge.className = "shelf-count";
+      badge.textContent = `×${count}`;
+      slot.append(badge);
+    }
+
+    shelf.append(slot);
+  });
+}
+
+// The message stays until it is tapped, also after closing the game.
+const giftMessage = document.getElementById("gift-message");
+
+function showGiftMessage() {
+  if (save.newGifts.length === 0) {
+    giftMessage.hidden = true;
+    return;
+  }
+
+  if (save.newGifts.length === 1) {
+    const gift = findGift(save.newGifts[0]);
+    giftMessage.textContent = `Betula left you ${gift.label}!${gift.rare ? " ★ Rare!" : ""}`;
+  } else {
+    giftMessage.textContent = `Betula left you ${save.newGifts.length} gifts while you were away!`;
+  }
+  giftMessage.hidden = false;
+}
+
+giftMessage.addEventListener("click", () => {
+  save.newGifts = [];
+  writeSave(save);
+  showGiftMessage();
+});
 
 document.querySelectorAll("[data-need]").forEach((button) => {
   button.addEventListener("click", () => refillNeed(button.dataset.need));
@@ -376,5 +638,7 @@ document.querySelectorAll("[data-need]").forEach((button) => {
 
 // The interval only redraws the screen; the stage and needs always come from saved times.
 render();
+renderShelf();
+showGiftMessage();
 setInterval(render, REDRAW_INTERVAL);
 document.addEventListener("visibilitychange", render);
