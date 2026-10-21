@@ -10,7 +10,10 @@
 </head>
 <body>
   <main class="device">
-    <h1 class="device-title">Betula Grows</h1>
+    <header class="device-header">
+      <h1 class="device-title">Betula Grows</h1>
+      <button id="menu-button" class="menu-button" type="button" aria-label="Menu">⋯</button>
+    </header>
 
     <div class="screen-frame">
       <canvas id="screen" class="screen" aria-label="Betula's screen"></canvas>
@@ -38,6 +41,22 @@
       <div id="shelf" class="shelf-grid"></div>
     </section>
   </main>
+
+  <!-- Small menu with a two-step reset, so nothing is erased by accident -->
+  <dialog id="menu" class="menu">
+    <div id="menu-main" class="menu-step">
+      <h2 class="menu-title">Menu</h2>
+      <button id="reset-button" class="menu-action danger" type="button">Reset Betula</button>
+      <button id="close-menu-button" class="menu-action" type="button">Close</button>
+    </div>
+
+    <div id="menu-confirm" class="menu-step" hidden>
+      <h2 class="menu-title">Start over?</h2>
+      <p class="menu-text">Betula and your whole collection will be erased. This can't be undone.</p>
+      <button id="confirm-reset-button" class="menu-action danger" type="button">Yes, reset</button>
+      <button id="cancel-reset-button" class="menu-action" type="button">Cancel</button>
+    </div>
+  </dialog>
 
   <script src="game.js"></script>
 </body>

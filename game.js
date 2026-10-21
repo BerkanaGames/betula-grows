@@ -455,10 +455,19 @@ function getStage(age) {
   return current;
 }
 
-let save = loadSave();
-if (!save) {
-  save = { lifeStartTime: Date.now() };
+// A brand-new game: a seed with full needs and an empty collection.
+function createNewSave(now) {
+  return {
+    lifeStartTime: now,
+    needs: createFullNeeds(),
+    lastUpdateTime: now,
+    careTotal: 0,
+    collection: {},
+    newGifts: [],
+  };
 }
+
+let save = loadSave() || createNewSave(Date.now());
 // Saves from older versions of the game get the parts they are missing.
 if (!save.needs) {
   save.needs = createFullNeeds();
@@ -630,6 +639,43 @@ giftMessage.addEventListener("click", () => {
   save.newGifts = [];
   writeSave(save);
   showGiftMessage();
+});
+
+// The menu has two steps: the main list, and a confirmation before reset.
+const menu = document.getElementById("menu");
+const menuMain = document.getElementById("menu-main");
+const menuConfirm = document.getElementById("menu-confirm");
+
+function showMenuStep(step) {
+  menuMain.hidden = step !== "main";
+  menuConfirm.hidden = step !== "confirm";
+}
+
+function resetGame() {
+  save = createNewSave(Date.now());
+  writeSave(save);
+  render();
+  renderShelf();
+  showGiftMessage();
+}
+
+document.getElementById("menu-button").addEventListener("click", () => {
+  showMenuStep("main");
+  menu.showModal();
+});
+document.getElementById("close-menu-button").addEventListener("click", () => menu.close());
+document.getElementById("reset-button").addEventListener("click", () => showMenuStep("confirm"));
+document.getElementById("cancel-reset-button").addEventListener("click", () => showMenuStep("main"));
+document.getElementById("confirm-reset-button").addEventListener("click", () => {
+  resetGame();
+  menu.close();
+});
+
+// A tap on the dark area around the menu closes it.
+menu.addEventListener("click", (event) => {
+  if (event.target === menu) {
+    menu.close();
+  }
 });
 
 document.querySelectorAll("[data-need]").forEach((button) => {
