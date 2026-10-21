@@ -59,3 +59,41 @@ body {
   border-radius: 6px;
   image-rendering: pixelated;
 }
+
+/* Big, finger-friendly buttons below the screen */
+.need-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.need-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 68px;
+  padding: 10px 4px;
+  border: none;
+  border-radius: 18px;
+  background: #fdfbf5;
+  box-shadow: 0 4px 0 var(--shell-shadow);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.need-button:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--shell-shadow);
+}
+
+.need-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
