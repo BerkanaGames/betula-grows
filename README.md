@@ -14,7 +14,8 @@ a small birch tree, from seed to birch in one cozy 24-hour life.
   the game is closed.
 - **Three needs.** Sun, water and company slowly run low over about four hours.
   Tap the icons on the screen, or use Select and OK, to look after her.
-  When a need runs low Betula looks sad, but she never dies.
+  Open the menu to see how she is doing. When a need runs low Betula looks sad,
+  but she never dies.
 - **Gifts.** At the end of each life Betula leaves you a gift and starts again
   as a seed. The better you cared for her, the better the chance of a rare one.
   Gifts stay in your collection forever.
@@ -23,7 +24,7 @@ Your game is saved in your browser, so each phone or computer has its own Betula
 
 ## Coming soon in version 1.1
 
-- A menu with stats, your gift collection, sound on/off and reset
+- More menu pages: stats, your gift collection and sound on/off
 - An attention icon that lights up when Betula needs something
 - 8-bit sounds
 - Day and night: a lamp, and Betula sleeping through the night

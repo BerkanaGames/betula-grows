@@ -62,7 +62,7 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 - The Attention icon is not a button: it lights up when Betula needs something.
 
 ### Icons
-- Menu: opens over Betula. Shows stats (age, current stage, lives lived, gifts collected), the gift collection, a sound on/off option and the reset option (with confirmation).
+- Menu: opens inside the LCD screen in place of Betula, drawn in pixel art, as pages browsed with left and right arrows (Select also turns the page, Back closes the menu). The first page shows the sun, water and company bars. The last page is always reset, with an "ERASE ALL?" question where NO is chosen first. The pages for stats (age, current stage, lives lived, gifts collected), the gift collection and sound on/off go between them.
 - Sun: refills the sun need. Does nothing at night, because Betula is sleeping.
 - Water: refills the water need.
 - Heart: opens the left-or-right mini-game.
@@ -105,7 +105,7 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 
 ### Session plan
 1. New screen layout: 24-hour life back (keeping gifts), 8 pixel icons, the three buttons, and Sun, Water and Heart working with the existing actions.
-2. Menu (stats, gifts, sound on/off, reset), Attention icon and the sound system.
+2. Menu pages for stats, gifts and sound on/off (the needs and reset pages already exist), Attention icon and the sound system.
 3. Day and night: Lamp, sleeping, slower needs at night, ?hour=N.
 4. Fallen leaves with the Broom, and pests with the Spray.
 5. Left-or-right mini-game.
