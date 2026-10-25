@@ -38,7 +38,7 @@ body {
   text-align: center;
 }
 
-/* Title in the middle, menu button on the right, home logo on the left */
+/* Title in the middle, home logo on the left, an empty column on the right to balance it */
 .device-header {
   display: grid;
   grid-template-columns: 40px 1fr 40px;
@@ -53,24 +53,6 @@ body {
   letter-spacing: 0.04em;
   color: #fdfbf5;
   text-shadow: 0 2px 0 var(--shell-shadow);
-}
-
-.menu-button {
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--frame);
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.menu-button:active {
-  background: rgba(255, 255, 255, 0.75);
 }
 
 /* Small round studio logo that leads back to the home page */
@@ -203,60 +185,6 @@ body {
   height: auto;
   border-radius: 6px;
   image-rendering: pixelated;
-}
-
-/* The menu window; its padding lives in the steps so a tap outside them closes it */
-.menu {
-  width: calc(100% - 32px);
-  max-width: 300px;
-  padding: 0;
-  border: none;
-  border-radius: 20px;
-  background: #fdfbf5;
-  color: var(--text);
-  text-align: center;
-}
-
-.menu::backdrop {
-  background: rgba(35, 38, 31, 0.5);
-}
-
-.menu-step {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 20px;
-}
-
-.menu-step[hidden] {
-  display: none;
-}
-
-.menu-title {
-  margin: 0 0 4px;
-  font-size: 1.2rem;
-}
-
-.menu-text {
-  margin: 0 0 6px;
-  line-height: 1.4;
-}
-
-.menu-action {
-  min-height: 48px;
-  border: none;
-  border-radius: 14px;
-  background: #ece6d6;
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.menu-action.danger {
-  background: #f3d3cc;
-  color: #8a2f22;
 }
 
 .shelf-count {
