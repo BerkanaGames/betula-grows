@@ -328,15 +328,15 @@ const NEED_ICON_TOP = 1;
 const NEED_BAR_TOP = 7;
 const NEED_BAR_LENGTH = 8;
 
-// Game time runs 720 times faster than real time: a full life lasts 2 minutes.
-// For testing, ?speed=N replaces it (?speed=1 is real time).
-// Other speeds use their own save, so tests never touch the real Betula.
-const NORMAL_SPEED = 720;
+// Betula lives in real time. Speed mode for testing: ?speed=720 makes a full life last 2 minutes.
+// Test speeds use their own save, so tests never touch the real Betula.
+const NORMAL_SPEED = 1;
 const speed = readSpeed();
-const SAVE_KEY = speed === NORMAL_SPEED ? "betula-grows-v2" : "betula-grows-test";
+const SAVE_KEY = speed === NORMAL_SPEED ? "betula-grows-v3" : "betula-grows-test";
 
-// Saves from when the normal speed was real time would end hundreds of lives at once.
-const OLD_SAVE_KEYS = ["betula-grows", "betula-grows-speed"];
+// Saves from older versions: their life is replaced by a new one, but their gifts are kept.
+const OLD_SAVE_KEYS = ["betula-grows", "betula-grows-v2"];
+const OLD_TEST_SAVE_KEY = "betula-grows-speed";
 
 const REDRAW_INTERVAL = 1000;
 
@@ -345,12 +345,26 @@ function readSpeed() {
   return Number.isFinite(value) && value > 0 ? value : NORMAL_SPEED;
 }
 
-function removeOldSaves() {
+// Gathers the gift collections of older saves into one, then removes those saves.
+function collectOldGifts() {
+  const collection = {};
+  OLD_SAVE_KEYS.forEach((key) => {
+    try {
+      const oldSave = JSON.parse(localStorage.getItem(key));
+      Object.entries((oldSave && oldSave.collection) || {}).forEach(([name, count]) => {
+        collection[name] = (collection[name] || 0) + count;
+      });
+      localStorage.removeItem(key);
+    } catch (error) {
+      // A broken or unreadable old save has no gifts to keep.
+    }
+  });
   try {
-    OLD_SAVE_KEYS.forEach((key) => localStorage.removeItem(key));
+    localStorage.removeItem(OLD_TEST_SAVE_KEY);
   } catch (error) {
     // Nothing to clean up if storage is not available.
   }
+  return collection;
 }
 
 function loadSave() {
@@ -480,8 +494,14 @@ function createNewSave(now) {
   };
 }
 
-removeOldSaves();
-let save = loadSave() || createNewSave(Date.now());
+let save = loadSave();
+if (!save) {
+  save = createNewSave(Date.now());
+  // Only the real game takes over old gifts; test speeds leave old saves alone.
+  if (speed === NORMAL_SPEED) {
+    save.collection = collectOldGifts();
+  }
+}
 // Saves from older versions of the game get the parts they are missing.
 if (!save.needs) {
   save.needs = createFullNeeds();
