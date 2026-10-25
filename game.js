@@ -2,8 +2,8 @@
 
 // The LCD is a grid of big "pixels". Each LCD pixel is drawn as a square
 // of CELL_SIZE canvas pixels, with a small gap so the grid shows, like a real LCD.
-const SCREEN_COLUMNS = 33;
-const SCREEN_ROWS = 49;
+const SCREEN_COLUMNS = 48;
+const SCREEN_ROWS = 48;
 const CELL_SIZE = 10;
 const CELL_GAP = 1;
 
@@ -18,7 +18,7 @@ const LCD_COLORS = {
 };
 
 // The row where the ground line is drawn.
-const GROUND_ROW = 38;
+const GROUND_ROW = 37;
 
 // Sprites are small grids: "#" is a pixel that is on, "." is off.
 // The last row of each stage sprite is empty and sits on the ground line.
@@ -143,116 +143,100 @@ const FACES = {
   },
 };
 
-// The 8 icons inside the LCD, as 7×7 sprites: 4 on top and 4 at the bottom, left to right.
+// The 8 icons inside the LCD, as 5×5 sprites: 4 on top and 4 at the bottom, left to right.
 // Attention is not a button: it only lights up when Betula needs something.
 const SCREEN_ICONS = [
   {
     name: "menu",
     selectable: true,
     sprite: [
-      ".......",
-      "#######",
-      ".......",
-      "#######",
-      ".......",
-      "#######",
-      ".......",
+      "#####",
+      ".....",
+      "#####",
+      ".....",
+      "#####",
     ],
   },
   {
     name: "sun",
     selectable: true,
     sprite: [
-      "#..#..#",
-      ".#...#.",
-      "..###..",
-      "#.###.#",
-      "..###..",
-      ".#...#.",
-      "#..#..#",
+      "#.#.#",
+      ".###.",
+      "#####",
+      ".###.",
+      "#.#.#",
     ],
   },
   {
     name: "water",
     selectable: true,
     sprite: [
-      "...#...",
-      "..###..",
-      ".#####.",
-      "#######",
-      "#######",
-      "#######",
-      ".#####.",
+      "..#..",
+      ".###.",
+      "#####",
+      "#####",
+      ".###.",
     ],
   },
   {
     name: "heart",
     selectable: true,
     sprite: [
-      ".......",
-      ".##.##.",
-      "#######",
-      "#######",
-      ".#####.",
-      "..###..",
-      "...#...",
+      ".#.#.",
+      "#####",
+      "#####",
+      ".###.",
+      "..#..",
     ],
   },
   {
     name: "lamp",
     selectable: true,
     sprite: [
-      "..###..",
-      ".#...#.",
-      ".#...#.",
-      ".#...#.",
-      "..#.#..",
-      "..###..",
-      "..###..",
+      ".###.",
+      "#...#",
+      ".#.#.",
+      ".###.",
+      ".###.",
     ],
   },
   {
     name: "broom",
     selectable: true,
     sprite: [
-      "......#",
-      ".....#.",
-      "....#..",
-      "..##...",
-      ".####..",
-      "#####..",
-      "#.#.#..",
+      "....#",
+      "...#.",
+      ".##..",
+      "###..",
+      "#.#..",
     ],
   },
   {
     name: "spray",
     selectable: true,
     sprite: [
-      "####..#",
-      "#.#....",
-      "..#.#..",
-      ".###..#",
-      "#####..",
-      "#####..",
-      "#####..",
+      "###.#",
+      ".#...",
+      "###.#",
+      "###..",
+      "###..",
     ],
   },
   {
     name: "attention",
     selectable: false,
     sprite: [
-      "..###..",
-      ".#.#.#.",
-      "#..#..#",
-      "#..#..#",
-      "#.....#",
-      ".#.#.#.",
-      "..###..",
+      "..#..",
+      "..#..",
+      "..#..",
+      ".....",
+      "..#..",
     ],
   },
 ];
 
-// Sun, Water and Heart each show the level of their need in a small bar below the icon.
+// Sun, Water and Heart each refill one need.
 const ICON_NEEDS = { sun: "sun", water: "water", heart: "company" };
 
 // The gifts Betula can leave at the end of a life, drawn as 8×8 sprites.
@@ -413,17 +397,15 @@ const NEED_FULL = 100;
 const NEED_EMPTY_DURATION = 4 * HOUR;
 const SAD_THRESHOLD = 30;
 
-// Layout of the icon rows: 4 slots of 8 columns each, with a 1-column margin on both sides.
+// Layout of the icon rows: 4 slots of 12 columns each, with the icon in the middle of its slot.
 const ICONS_PER_ROW = 4;
-const ICON_SIZE = 7;
-const ICON_SLOT_WIDTH = 8;
-const ICONS_LEFT = 1;
-const TOP_ICONS_TOP = 1;
-const NEED_BAR_ROW = 9;
+const ICON_SLOT_WIDTH = 12;
+const ICONS_LEFT = 4;
+const TOP_ICONS_TOP = 2;
 const BOTTOM_ICONS_TOP = 41;
 
 // Taps above this row hit the top icons; taps below the ground hit the bottom icons.
-const TOP_ICONS_TAP_LIMIT = 11;
+const TOP_ICONS_TAP_LIMIT = 9;
 
 // Betula lives in real time. Speed mode for testing: ?speed=720 makes a full life last 2 minutes.
 // Test speeds use their own save, so tests never touch the real Betula.
@@ -665,19 +647,11 @@ function getIconPosition(index) {
 }
 
 // Like a real Tamagotchi, icons are dim and only the highlighted one is dark.
-function placeIcons(screen, needs) {
+function placeIcons(screen) {
   SCREEN_ICONS.forEach((icon, index) => {
     const { left, top } = getIconPosition(index);
     const isHighlighted = index === highlightedIcon;
     placeSprite(screen, icon.sprite, left, top, isHighlighted ? PIXEL.on : PIXEL.dim);
-
-    const need = ICON_NEEDS[icon.name];
-    if (need) {
-      const filledLength = Math.ceil((needs[need] / NEED_FULL) * ICON_SIZE);
-      for (let i = 0; i < filledLength; i++) {
-        screen[NEED_BAR_ROW][left + i] = PIXEL.on;
-      }
-    }
   });
 }
 
@@ -718,7 +692,7 @@ function render() {
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
   const top = GROUND_ROW - sprite.length + 1;
 
-  placeIcons(screen, save.needs);
+  placeIcons(screen);
   placeGround(screen);
   placeSprite(screen, sprite, left, top);
   placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
@@ -875,7 +849,7 @@ function findTappedIcon(event) {
     return null;
   }
 
-  const slot = Math.floor((column - ICONS_LEFT) / ICON_SLOT_WIDTH);
+  const slot = Math.floor(column / ICON_SLOT_WIDTH);
   return firstIndex + Math.min(ICONS_PER_ROW - 1, Math.max(0, slot));
 }
 
