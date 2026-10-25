@@ -2,19 +2,23 @@
 
 // The LCD is a grid of big "pixels". Each LCD pixel is drawn as a square
 // of CELL_SIZE canvas pixels, with a small gap so the grid shows, like a real LCD.
-const SCREEN_COLUMNS = 32;
-const SCREEN_ROWS = 38;
+const SCREEN_COLUMNS = 33;
+const SCREEN_ROWS = 49;
 const CELL_SIZE = 10;
 const CELL_GAP = 1;
+
+// Each LCD pixel is off, dim (icons that are not highlighted) or on.
+const PIXEL = { off: 0, dim: 1, on: 2 };
 
 const LCD_COLORS = {
   background: "#c4cfa1",
   pixelOn: "#1f2a1a",
+  pixelDim: "rgba(31, 42, 26, 0.3)",
   pixelOff: "rgba(31, 42, 26, 0.07)",
 };
 
 // The row where the ground line is drawn.
-const GROUND_ROW = 35;
+const GROUND_ROW = 38;
 
 // Sprites are small grids: "#" is a pixel that is on, "." is off.
 // The last row of each stage sprite is empty and sits on the ground line.
@@ -139,30 +143,117 @@ const FACES = {
   },
 };
 
-// 5×5 icons shown above each need bar.
-const NEED_ICONS = {
-  water: [
-    "..#..",
-    ".###.",
-    "#####",
-    "#####",
-    ".###.",
-  ],
-  sun: [
-    "#.#.#",
-    ".###.",
-    "#####",
-    ".###.",
-    "#.#.#",
-  ],
-  company: [
-    ".#.#.",
-    "#####",
-    "#####",
-    ".###.",
-    "..#..",
-  ],
-};
+// The 8 icons inside the LCD, as 7×7 sprites: 4 on top and 4 at the bottom, left to right.
+// Attention is not a button: it only lights up when Betula needs something.
+const SCREEN_ICONS = [
+  {
+    name: "menu",
+    selectable: true,
+    sprite: [
+      ".......",
+      "#######",
+      ".......",
+      "#######",
+      ".......",
+      "#######",
+      ".......",
+    ],
+  },
+  {
+    name: "sun",
+    selectable: true,
+    sprite: [
+      "#..#..#",
+      ".#...#.",
+      "..###..",
+      "#.###.#",
+      "..###..",
+      ".#...#.",
+      "#..#..#",
+    ],
+  },
+  {
+    name: "water",
+    selectable: true,
+    sprite: [
+      "...#...",
+      "..###..",
+      ".#####.",
+      "#######",
+      "#######",
+      "#######",
+      ".#####.",
+    ],
+  },
+  {
+    name: "heart",
+    selectable: true,
+    sprite: [
+      ".......",
+      ".##.##.",
+      "#######",
+      "#######",
+      ".#####.",
+      "..###..",
+      "...#...",
+    ],
+  },
+  {
+    name: "lamp",
+    selectable: true,
+    sprite: [
+      "..###..",
+      ".#...#.",
+      ".#...#.",
+      ".#...#.",
+      "..#.#..",
+      "..###..",
+      "..###..",
+    ],
+  },
+  {
+    name: "broom",
+    selectable: true,
+    sprite: [
+      "......#",
+      ".....#.",
+      "....#..",
+      "..##...",
+      ".####..",
+      "#####..",
+      "#.#.#..",
+    ],
+  },
+  {
+    name: "spray",
+    selectable: true,
+    sprite: [
+      "####..#",
+      "#.#....",
+      "..#.#..",
+      ".###..#",
+      "#####..",
+      "#####..",
+      "#####..",
+    ],
+  },
+  {
+    name: "attention",
+    selectable: false,
+    sprite: [
+      "..###..",
+      ".#.#.#.",
+      "#..#..#",
+      "#..#..#",
+      "#.....#",
+      ".#.#.#.",
+      "..###..",
+    ],
+  },
+];
+
+// Sun, Water and Heart each show the level of their need in a small bar below the icon.
+const ICON_NEEDS = { sun: "sun", water: "water", heart: "company" };
 
 // The gifts Betula can leave at the end of a life, drawn as 8×8 sprites.
 const GIFTS = [
@@ -322,11 +413,17 @@ const NEED_FULL = 100;
 const NEED_EMPTY_DURATION = 4 * HOUR;
 const SAD_THRESHOLD = 30;
 
-// Layout of the need bars at the top of the screen.
-const NEED_GROUP_WIDTH = 10;
-const NEED_ICON_TOP = 1;
-const NEED_BAR_TOP = 7;
-const NEED_BAR_LENGTH = 8;
+// Layout of the icon rows: 4 slots of 8 columns each, with a 1-column margin on both sides.
+const ICONS_PER_ROW = 4;
+const ICON_SIZE = 7;
+const ICON_SLOT_WIDTH = 8;
+const ICONS_LEFT = 1;
+const TOP_ICONS_TOP = 1;
+const NEED_BAR_ROW = 9;
+const BOTTOM_ICONS_TOP = 41;
+
+// Taps above this row hit the top icons; taps below the ground hit the bottom icons.
+const TOP_ICONS_TAP_LIMIT = 11;
 
 // Betula lives in real time. Speed mode for testing: ?speed=720 makes a full life last 2 minutes.
 // Test speeds use their own save, so tests never touch the real Betula.
@@ -518,6 +615,9 @@ if (!save.newGifts) {
 }
 writeSave(save);
 
+// The icon that Select moves and OK uses; null when nothing is highlighted.
+let highlightedIcon = null;
+
 const canvas = document.getElementById("screen");
 const context = canvas.getContext("2d");
 
@@ -528,7 +628,7 @@ canvas.height = SCREEN_ROWS * CELL_SIZE;
 function createGrid(rows, columns) {
   const grid = [];
   for (let row = 0; row < rows; row++) {
-    grid.push(new Array(columns).fill(false));
+    grid.push(new Array(columns).fill(PIXEL.off));
   }
   return grid;
 }
@@ -537,14 +637,14 @@ function isInsideGrid(grid, row, column) {
   return row >= 0 && row < grid.length && column >= 0 && column < grid[0].length;
 }
 
-// Turns on the pixels of a sprite, with its top-left corner at (left, top).
-function placeSprite(grid, sprite, left, top) {
+// Lights the pixels of a sprite, with its top-left corner at (left, top).
+function placeSprite(grid, sprite, left, top, value = PIXEL.on) {
   sprite.forEach((line, spriteRow) => {
     [...line].forEach((character, spriteColumn) => {
       const row = top + spriteRow;
       const column = left + spriteColumn;
       if (character === "#" && isInsideGrid(grid, row, column)) {
-        grid[row][column] = true;
+        grid[row][column] = value;
       }
     });
   });
@@ -552,33 +652,46 @@ function placeSprite(grid, sprite, left, top) {
 
 function placeGround(screen) {
   for (let column = 2; column < SCREEN_COLUMNS - 2; column++) {
-    screen[GROUND_ROW][column] = true;
+    screen[GROUND_ROW][column] = PIXEL.on;
   }
 }
 
-// Each need gets an icon with a bar below it that empties as the need drops.
-function placeNeedBars(screen, needs) {
-  NEEDS.forEach((need, index) => {
-    const groupLeft = 1 + index * NEED_GROUP_WIDTH;
-    placeSprite(screen, NEED_ICONS[need], groupLeft + 2, NEED_ICON_TOP);
+function getIconPosition(index) {
+  const slot = index % ICONS_PER_ROW;
+  return {
+    left: ICONS_LEFT + slot * ICON_SLOT_WIDTH,
+    top: index < ICONS_PER_ROW ? TOP_ICONS_TOP : BOTTOM_ICONS_TOP,
+  };
+}
 
-    const filledLength = Math.ceil((needs[need] / NEED_FULL) * NEED_BAR_LENGTH);
-    for (let i = 0; i < filledLength; i++) {
-      screen[NEED_BAR_TOP][groupLeft + i] = true;
+// Like a real Tamagotchi, icons are dim and only the highlighted one is dark.
+function placeIcons(screen, needs) {
+  SCREEN_ICONS.forEach((icon, index) => {
+    const { left, top } = getIconPosition(index);
+    const isHighlighted = index === highlightedIcon;
+    placeSprite(screen, icon.sprite, left, top, isHighlighted ? PIXEL.on : PIXEL.dim);
+
+    const need = ICON_NEEDS[icon.name];
+    if (need) {
+      const filledLength = Math.ceil((needs[need] / NEED_FULL) * ICON_SIZE);
+      for (let i = 0; i < filledLength; i++) {
+        screen[NEED_BAR_ROW][left + i] = PIXEL.on;
+      }
     }
   });
 }
 
-// Paints every LCD pixel on a canvas: dark if on, a faint "ghost" if off.
+// Paints every LCD pixel on a canvas: dark if on, half-dark if dim, a faint "ghost" if off.
 function drawGrid(drawingContext, grid) {
   const { canvas: target } = drawingContext;
   drawingContext.fillStyle = LCD_COLORS.background;
   drawingContext.fillRect(0, 0, target.width, target.height);
 
+  const colors = [LCD_COLORS.pixelOff, LCD_COLORS.pixelDim, LCD_COLORS.pixelOn];
   const size = CELL_SIZE - CELL_GAP;
   grid.forEach((cells, row) => {
-    cells.forEach((isOn, column) => {
-      drawingContext.fillStyle = isOn ? LCD_COLORS.pixelOn : LCD_COLORS.pixelOff;
+    cells.forEach((value, column) => {
+      drawingContext.fillStyle = colors[value];
       drawingContext.fillRect(column * CELL_SIZE, row * CELL_SIZE, size, size);
     });
   });
@@ -605,7 +718,7 @@ function render() {
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
   const top = GROUND_ROW - sprite.length + 1;
 
-  placeNeedBars(screen, save.needs);
+  placeIcons(screen, save.needs);
   placeGround(screen);
   placeSprite(screen, sprite, left, top);
   placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
@@ -669,11 +782,13 @@ function showGiftMessage() {
   giftMessage.hidden = false;
 }
 
-giftMessage.addEventListener("click", () => {
+function dismissGiftMessage() {
   save.newGifts = [];
   writeSave(save);
   showGiftMessage();
-});
+}
+
+giftMessage.addEventListener("click", dismissGiftMessage);
 
 // The menu has two steps: the main list, and a confirmation before reset.
 const menu = document.getElementById("menu");
@@ -712,9 +827,72 @@ menu.addEventListener("click", (event) => {
   }
 });
 
-document.querySelectorAll("[data-need]").forEach((button) => {
-  button.addEventListener("click", () => refillNeed(button.dataset.need));
+// Highlights an icon and does what it does. Icons without an action yet only get highlighted.
+function useIcon(index) {
+  const icon = SCREEN_ICONS[index];
+  if (!icon.selectable) {
+    return;
+  }
+  highlightedIcon = index;
+
+  const need = ICON_NEEDS[icon.name];
+  if (need) {
+    refillNeed(need);
+  } else {
+    render();
+  }
+}
+
+// Moves the highlight to the next icon that can be used, skipping Attention.
+function selectNextIcon() {
+  let next = highlightedIcon;
+  do {
+    next = next === null ? 0 : (next + 1) % SCREEN_ICONS.length;
+  } while (!SCREEN_ICONS[next].selectable);
+  highlightedIcon = next;
+  render();
+}
+
+function goBack() {
+  highlightedIcon = null;
+  if (save.newGifts.length > 0) {
+    dismissGiftMessage();
+  }
+  render();
+}
+
+// Finds which icon is under a tap on the screen, using the LCD grid position.
+function findTappedIcon(event) {
+  const column = (event.offsetX / canvas.clientWidth) * SCREEN_COLUMNS;
+  const row = (event.offsetY / canvas.clientHeight) * SCREEN_ROWS;
+
+  let firstIndex;
+  if (row < TOP_ICONS_TAP_LIMIT) {
+    firstIndex = 0;
+  } else if (row > GROUND_ROW) {
+    firstIndex = ICONS_PER_ROW;
+  } else {
+    return null;
+  }
+
+  const slot = Math.floor((column - ICONS_LEFT) / ICON_SLOT_WIDTH);
+  return firstIndex + Math.min(ICONS_PER_ROW - 1, Math.max(0, slot));
+}
+
+canvas.addEventListener("click", (event) => {
+  const index = findTappedIcon(event);
+  if (index !== null) {
+    useIcon(index);
+  }
 });
+
+document.getElementById("select-button").addEventListener("click", selectNextIcon);
+document.getElementById("ok-button").addEventListener("click", () => {
+  if (highlightedIcon !== null) {
+    useIcon(highlightedIcon);
+  }
+});
+document.getElementById("back-button").addEventListener("click", goBack);
 
 // The interval only redraws the screen; the stage and needs always come from saved times.
 render();
