@@ -937,13 +937,18 @@ function formatAge(age) {
   return minutes < 60 ? `${minutes}M` : `${Math.floor(minutes / 60)}H`;
 }
 
+// Big numbers are shortened (2736 becomes 2K) so every line fits between the arrows.
+function formatCount(count) {
+  return count < 1000 ? `${count}` : `${Math.floor(count / 1000)}K`;
+}
+
 function placeStatsPage(screen) {
   const age = getAge(save, Date.now());
   const lines = [
     `AGE ${formatAge(age)}`,
     getStage(age).name.toUpperCase(),
-    `LIVES ${save.livesLived}`,
-    `GIFTS ${countGifts(save.collection)}`,
+    `LIVES ${formatCount(save.livesLived)}`,
+    `GIFTS ${formatCount(countGifts(save.collection))}`,
   ];
   lines.forEach((line, index) => {
     placeText(screen, line, getCenteredLeft(getTextWidth(line)), STATS_PAGE_TOP + index * STATS_PAGE_LINE_SPACING);
