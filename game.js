@@ -115,19 +115,27 @@ const SPRITES = {
 };
 
 // Faces in two sizes: small for the seed and sprout, large for the trees.
+// The small bodies are too narrow for long closed eyes, so the small sleeping face
+// lowers its eyes instead; the trees close theirs into short lines.
 const FACES = {
   small: {
     happy: [
-      "#..#",
-      "....",
-      "#..#",
-      ".##.",
+      ".#..#.",
+      "......",
+      ".#..#.",
+      "..##..",
     ],
     sad: [
-      "#..#",
-      "....",
-      ".##.",
-      "#..#",
+      ".#..#.",
+      "......",
+      "..##..",
+      ".#..#.",
+    ],
+    sleep: [
+      "......",
+      ".#..#.",
+      "......",
+      "..##..",
     ],
   },
   large: {
@@ -143,8 +151,21 @@ const FACES = {
       "..####..",
       ".#....#.",
     ],
+    sleep: [
+      "##....##",
+      "........",
+      "........",
+      "..####..",
+    ],
   },
 };
+
+// The "Zzz" above a sleeping Betula: a big Z, then the big Z with a small z rising beside it.
+const SMALL_Z_SPRITE = ["###", ".#.", "###"];
+const SLEEP_FRAME_INTERVAL = 1000;
+
+// While Betula sleeps, her needs drop this many times slower.
+const SLEEP_DROP_FACTOR = 0.25;
 
 // The 8 icons inside the LCD, as 5×5 sprites: 4 on top and 4 at the bottom, left to right.
 // Attention is not a button: it only lights up when Betula needs something.
@@ -497,8 +518,8 @@ const LIFE_DURATION = 24 * HOUR;
 // Each stage starts at a given age of Betula's life.
 // The face position is measured from the top-left corner of the stage sprite.
 const STAGES = [
-  { name: "seed", startsAt: 0, face: { size: "small", left: 6, top: 9 } },
-  { name: "sprout", startsAt: 2 * HOUR, face: { size: "small", left: 6, top: 10 } },
+  { name: "seed", startsAt: 0, face: { size: "small", left: 5, top: 9 } },
+  { name: "sprout", startsAt: 2 * HOUR, face: { size: "small", left: 5, top: 10 } },
   { name: "sapling", startsAt: 6 * HOUR, face: { size: "large", left: 4, top: 5 } },
   { name: "birch", startsAt: 12 * HOUR, face: { size: "large", left: 6, top: 7 } },
 ];
@@ -681,9 +702,14 @@ function updateNeeds(save, now) {
   save.lastUpdateTime = Math.max(save.lastUpdateTime, now);
 }
 
-// How fast needs drop right now, compared with normal.
-function getNeedDropFactor() {
-  return 1;
+// At night with the light off, Betula sleeps.
+function isSleepingAt(save, realTime) {
+  return isNightAt(realTime) && !save.lightOn;
+}
+
+// How fast needs drop at a moment, compared with normal.
+function getNeedDropFactor(save, realTime) {
+  return isSleepingAt(save, realTime) ? SLEEP_DROP_FACTOR : 1;
 }
 
 // Lowers every need by some game time, and adds the care given in that time to the life's care total.
@@ -823,6 +849,7 @@ let menuTapTargets = [];
 // What the last redraw showed, to play a sound when Betula grows or starts needing attention.
 let lastStageName = null;
 let wasAttentionOn = null;
+let wasSleeping = null;
 
 const canvas = document.getElementById("screen");
 const context = canvas.getContext("2d");
@@ -1081,6 +1108,14 @@ function placeResetPage(screen) {
   );
 }
 
+// Two frames that take turns: a big Z, then the big Z with a small z rising up and to the right.
+function placeSleepingZs(screen, left, top, now) {
+  placeText(screen, "Z", left, top + 3);
+  if (Math.floor(now / SLEEP_FRAME_INTERVAL) % 2 === 1) {
+    placeSprite(screen, SMALL_Z_SPRITE, left + 4, top);
+  }
+}
+
 function getScreenBackground(save, now) {
   if (!save.lightOn) {
     return LCD_COLORS.backgroundLightOff;
@@ -1116,20 +1151,30 @@ function render() {
 
   const stage = getStage(getAge(save, now));
   const isAttentionOn = needsAttention(save);
+  const isSleeping = isSleepingAt(save, now);
 
-  // Sounds for things that happen by themselves: a gift, growing up, or a new need for attention.
+  // Sounds for things that happen by themselves: a gift, growing up, falling asleep,
+  // or a new need for attention.
   if (giftsLeft > 0) {
     playSound("gift");
   } else if (lastStageName !== null && stage.name !== lastStageName) {
     playSound("grow");
+  } else if (wasSleeping === false && isSleeping) {
+    playSound("goodnight");
   } else if (wasAttentionOn === false && isAttentionOn) {
     playSound("attention");
   }
   lastStageName = stage.name;
   wasAttentionOn = isAttentionOn;
+  wasSleeping = isSleeping;
 
   const sprite = SPRITES[stage.name];
-  const mood = isSad(save.needs) ? "sad" : "happy";
+  let mood = "happy";
+  if (isSleeping) {
+    mood = "sleep";
+  } else if (isSad(save.needs)) {
+    mood = "sad";
+  }
   const face = FACES[stage.face.size][mood];
   const screen = createGrid(SCREEN_ROWS, SCREEN_COLUMNS);
 
@@ -1144,6 +1189,9 @@ function render() {
     placeGround(screen);
     placeSprite(screen, sprite, left, top);
     placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
+    if (isSleeping) {
+      placeSleepingZs(screen, left + sprite[0].length + 1, top + stage.face.top - 6, now);
+    }
   }
   drawGrid(context, screen, getScreenBackground(save, now));
 }
@@ -1156,6 +1204,7 @@ const SOUNDS = {
   grow: [[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.18]],
   gift: [[784, 0.1], [988, 0.1], [1175, 0.1], [1568, 0.26]],
   attention: [[1319, 0.08], [0, 0.06], [1319, 0.08]],
+  goodnight: [[784, 0.18], [659, 0.18], [523, 0.18], [0, 0.06], [392, 0.36]],
   lightOn: [[440, 0.04], [880, 0.06]],
   lightOff: [[880, 0.04], [440, 0.06]],
   blocked: [[196, 0.12]],
