@@ -542,6 +542,23 @@ const NEED_FULL = 100;
 const NEED_EMPTY_DURATION = 4 * HOUR;
 const SAD_THRESHOLD = 30;
 
+// Fallen leaves: one falls every LEAF_INTERVAL, day and night, up to MAX_LEAVES on the ground.
+// With LEAVES_SAD_COUNT or more, Betula is sad and asks for attention.
+const LEAF_INTERVAL = 2 * HOUR;
+const MAX_LEAVES = 5;
+const LEAVES_SAD_COUNT = 3;
+const LEAF_SPRITE = [
+  "..###",
+  ".####",
+  "#....",
+];
+// Where each leaf lands, in falling order: alternating sides, around Betula's roots.
+const LEAF_SLOTS = [8, 36, 2, 42, 30];
+
+// Short animations that play after using an icon, drawn many times a second.
+const EFFECT_FRAME_INTERVAL = 60;
+const SWEEP_DURATION = 900;
+
 // Layout of the icon rows: 4 slots of 12 columns each, with the icon in the middle of its slot.
 const ICONS_PER_ROW = 4;
 const ICON_SLOT_WIDTH = 12;
@@ -781,6 +798,24 @@ function isSad(needs) {
   return NEEDS.some((need) => needs[need] < SAD_THRESHOLD);
 }
 
+// Adds the leaves that fell since the last one, counted from the saved time, also while closed.
+function updateLeaves(save, now) {
+  const fallen = Math.floor(((now - save.lastLeafTime) * speed) / LEAF_INTERVAL);
+  if (fallen > 0) {
+    save.leaves = Math.min(MAX_LEAVES, save.leaves + fallen);
+    save.lastLeafTime += (fallen * LEAF_INTERVAL) / speed;
+  }
+}
+
+function hasTooManyLeaves(save) {
+  return save.leaves >= LEAVES_SAD_COUNT;
+}
+
+// Betula looks sad when a need is low or when too many leaves pile up around her.
+function isUnhappy(save) {
+  return isSad(save.needs) || hasTooManyLeaves(save);
+}
+
 // At night with the light on, Betula cannot sleep and gets grumpy.
 function isGrumpyAt(save, realTime) {
   return isNightAt(realTime) && save.lightOn;
@@ -792,6 +827,7 @@ const ATTENTION_CHECKS = [
   (save) => isSad(save.needs),
   // From 21:00, a reminder to turn the light off, like the original Tamagotchi.
   (save, now) => isGrumpyAt(save, now),
+  (save) => hasTooManyLeaves(save),
 ];
 
 function needsAttention(save, now) {
@@ -820,6 +856,9 @@ function createNewSave(now) {
     livesLived: 0,
     soundOn: true,
     lightOn: true,
+    leaves: 0,
+    lastLeafTime: now,
+    leavesSwept: 0,
   };
 }
 
@@ -856,6 +895,12 @@ if (save.soundOn === undefined) {
 if (save.lightOn === undefined) {
   save.lightOn = true;
 }
+// Leaves start falling from the last time the save was updated.
+if (save.leaves === undefined) {
+  save.leaves = 0;
+  save.lastLeafTime = save.lastUpdateTime;
+  save.leavesSwept = 0;
+}
 writeSave(save);
 
 // The icon that Select moves and OK uses; null when nothing is highlighted.
@@ -871,6 +916,9 @@ let menuTapTargets = [];
 let lastStageName = null;
 let wasAttentionOn = null;
 let wasSleeping = null;
+
+// The animation playing right now, if any: { name, duration, startTime, ... }.
+let effect = null;
 
 const canvas = document.getElementById("screen");
 const context = canvas.getContext("2d");
@@ -1129,6 +1177,51 @@ function placeResetPage(screen) {
   );
 }
 
+// How far an animation has played, from 0 to 1, or null when it is not playing.
+function getEffectProgress(name, now) {
+  if (!effect || effect.name !== name) {
+    return null;
+  }
+  const progress = (now - effect.startTime) / effect.duration;
+  return progress < 1 ? progress : null;
+}
+
+// Redraws many times a second while an animation plays, then goes back to the normal pace.
+function playEffect(name, duration, details = {}) {
+  effect = { name, duration, startTime: Date.now(), ...details };
+  const drawFrame = () => {
+    render();
+    if (effect && Date.now() - effect.startTime < effect.duration) {
+      setTimeout(drawFrame, EFFECT_FRAME_INTERVAL);
+    } else {
+      effect = null;
+      render();
+    }
+  };
+  drawFrame();
+}
+
+// Leaves lie on the ground in their slots. While the broom sweeps, the leaves it has not
+// reached yet are still drawn, and the broom moves along the ground from left to right.
+function placeLeaves(screen, now) {
+  const leafTop = GROUND_ROW - LEAF_SPRITE.length;
+  LEAF_SLOTS.slice(0, save.leaves).forEach((slotLeft) => {
+    placeSprite(screen, LEAF_SPRITE, slotLeft, leafTop);
+  });
+
+  const sweep = getEffectProgress("sweep", now);
+  if (sweep !== null) {
+    const broom = findScreenIcon("broom").sprite;
+    const broomLeft = Math.round(-broom[0].length + sweep * (SCREEN_COLUMNS + broom[0].length));
+    LEAF_SLOTS.slice(0, effect.sweptLeaves).forEach((slotLeft) => {
+      if (slotLeft > broomLeft) {
+        placeSprite(screen, LEAF_SPRITE, slotLeft, leafTop);
+      }
+    });
+    placeSprite(screen, broom, broomLeft, GROUND_ROW - broom.length);
+  }
+}
+
 // Two frames that take turns: a big Z, then the big Z with a small z rising up and to the right.
 function placeSleepingZs(screen, left, top, now) {
   placeText(screen, "Z", left, top + 3);
@@ -1164,6 +1257,7 @@ function render() {
   const now = Date.now();
   const giftsLeft = finishEndedLives(save, now);
   updateNeeds(save, now);
+  updateLeaves(save, now);
   writeSave(save);
 
   if (giftsLeft > 0) {
@@ -1195,7 +1289,7 @@ function render() {
     mood = "sleep";
   } else if (isGrumpyAt(save, now)) {
     mood = "grumpy";
-  } else if (isSad(save.needs)) {
+  } else if (isUnhappy(save)) {
     mood = "sad";
   }
   const face = FACES[stage.face.size][mood];
@@ -1210,6 +1304,7 @@ function render() {
     placeMenu(screen);
   } else {
     placeGround(screen);
+    placeLeaves(screen, now);
     placeSprite(screen, sprite, left, top);
     placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
     if (isSleeping) {
@@ -1230,6 +1325,7 @@ const SOUNDS = {
   goodnight: [[784, 0.18], [659, 0.18], [523, 0.18], [0, 0.06], [392, 0.36]],
   lightOn: [[440, 0.04], [880, 0.06]],
   lightOff: [[880, 0.04], [440, 0.06]],
+  sweep: [[1400, 0.03], [1100, 0.03], [900, 0.03], [700, 0.03], [500, 0.05]],
   blocked: [[196, 0.12]],
 };
 const SOUND_VOLUME = 0.06;
@@ -1376,6 +1472,10 @@ function useIcon(index) {
     toggleLight();
     return;
   }
+  if (icon.name === "broom") {
+    sweepLeaves();
+    return;
+  }
   // At night Betula is resting, so she cannot take sun.
   if (icon.name === "sun" && isNightAt(Date.now())) {
     playSound("blocked");
@@ -1391,6 +1491,19 @@ function useIcon(index) {
     playSound("tap");
     render();
   }
+}
+
+// The broom always sweeps across the ground, even with no leaves, so the tap feels answered.
+function sweepLeaves() {
+  const now = Date.now();
+  updateLeaves(save, now);
+  const sweptLeaves = save.leaves;
+  save.leavesSwept += sweptLeaves;
+  save.leaves = 0;
+  save.lastLeafTime = now;
+  writeSave(save);
+  playSound("sweep");
+  playEffect("sweep", SWEEP_DURATION, { sweptLeaves });
 }
 
 // The needs are brought up to date first, so the time before the switch counts with the old light.
