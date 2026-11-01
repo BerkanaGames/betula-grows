@@ -743,6 +743,10 @@ const menuState = { isOpen: false, page: 0, isConfirmingReset: false, resetChoic
 // Areas of the screen that can be tapped while the menu is open, rebuilt on every redraw.
 let menuTapTargets = [];
 
+// What the last redraw showed, to play a sound when Betula grows or starts needing attention.
+let lastStageName = null;
+let wasAttentionOn = null;
+
 const canvas = document.getElementById("screen");
 const context = canvas.getContext("2d");
 
@@ -1022,6 +1026,19 @@ function render() {
   }
 
   const stage = getStage(getAge(save, now));
+  const isAttentionOn = needsAttention(save);
+
+  // Sounds for things that happen by themselves: a gift, growing up, or a new need for attention.
+  if (giftsLeft > 0) {
+    playSound("gift");
+  } else if (lastStageName !== null && stage.name !== lastStageName) {
+    playSound("grow");
+  } else if (wasAttentionOn === false && isAttentionOn) {
+    playSound("attention");
+  }
+  lastStageName = stage.name;
+  wasAttentionOn = isAttentionOn;
+
   const sprite = SPRITES[stage.name];
   const mood = isSad(save.needs) ? "sad" : "happy";
   const face = FACES[stage.face.size][mood];
@@ -1031,7 +1048,7 @@ function render() {
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
   const top = GROUND_ROW - sprite.length + 1;
 
-  placeIcons(screen, needsAttention(save));
+  placeIcons(screen, isAttentionOn);
   if (menuState.isOpen) {
     placeMenu(screen);
   } else {
@@ -1040,6 +1057,60 @@ function render() {
     placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
   }
   drawGrid(context, screen);
+}
+
+// 8-bit sounds made with the Web Audio API: short square-wave notes, no audio files.
+// Each sound is a list of [frequency in Hz, duration in seconds]; a frequency of 0 is a pause.
+const SOUNDS = {
+  tap: [[880, 0.04]],
+  refill: [[523, 0.08], [784, 0.12]],
+  grow: [[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.18]],
+  gift: [[784, 0.1], [988, 0.1], [1175, 0.1], [1568, 0.26]],
+  attention: [[1319, 0.08], [0, 0.06], [1319, 0.08]],
+};
+const SOUND_VOLUME = 0.06;
+const SOUND_SILENCE = 0.0001;
+
+let audioContext = null;
+
+// Browsers only allow sound after the player touches the page, so audio starts on the first tap.
+function startAudio() {
+  if (!audioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+      return;
+    }
+    audioContext = new AudioContextClass();
+  }
+  if (audioContext.state === "suspended") {
+    audioContext.resume();
+  }
+}
+
+["pointerdown", "touchend", "click", "keydown"].forEach((eventName) => {
+  document.addEventListener(eventName, startAudio);
+});
+
+function playSound(name) {
+  if (!save.soundOn || !audioContext) {
+    return;
+  }
+  let time = audioContext.currentTime;
+  SOUNDS[name].forEach(([frequency, duration]) => {
+    if (frequency > 0) {
+      const oscillator = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      oscillator.type = "square";
+      oscillator.frequency.value = frequency;
+      // Fading each note out quickly avoids a click at its end.
+      volume.gain.setValueAtTime(SOUND_VOLUME, time);
+      volume.gain.exponentialRampToValueAtTime(SOUND_SILENCE, time + duration);
+      oscillator.connect(volume).connect(audioContext.destination);
+      oscillator.start(time);
+      oscillator.stop(time + duration);
+    }
+    time += duration;
+  });
 }
 
 // The message stays until it is tapped, also after closing the game.
@@ -1111,6 +1182,8 @@ function resetGame() {
   writeSave(save);
   closeMenu();
   highlightedIcon = null;
+  // Going back to a seed is not growing up, so the next redraw starts counting again.
+  lastStageName = null;
   showGiftMessage();
 }
 
@@ -1122,6 +1195,7 @@ function useIcon(index) {
     return;
   }
   highlightedIcon = index;
+  playSound(icon.name === "sun" || icon.name === "water" ? "refill" : "tap");
 
   if (icon.name === "menu") {
     if (menuState.isOpen) {
@@ -1153,6 +1227,7 @@ function selectNextIcon() {
 
 // In the menu, Select turns the page, or switches between NO and YES.
 function pressSelect() {
+  playSound("tap");
   if (!menuState.isOpen) {
     selectNextIcon();
   } else if (menuState.isConfirmingReset) {
@@ -1179,11 +1254,14 @@ function pressOk() {
   } else if (page === "reset") {
     startResetQuestion();
   }
+  // Played after the action, so turning sound on is confirmed with a beep.
+  playSound("tap");
   render();
 }
 
 // Back answers NO to the reset question, closes the menu, or clears the highlight.
 function pressBack() {
+  playSound("tap");
   if (menuState.isConfirmingReset) {
     menuState.isConfirmingReset = false;
   } else if (menuState.isOpen) {
@@ -1242,6 +1320,7 @@ canvas.addEventListener("click", (event) => {
     const target = findMenuTapTarget(cell);
     if (target) {
       target.action();
+      playSound("tap");
       render();
     }
   }
