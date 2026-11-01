@@ -25,14 +25,16 @@ a small birch tree, from seed to birch in one cozy 24-hour life.
 - **Leaves and pests.** Dry leaves pile up around her: sweep them with the broom.
   Little bugs sometimes come, more often when she is not well cared for: spray
   them away before her needs run low.
+- **Left or right.** Tap the heart to play with her: guess on which side a little
+  bird will appear, five times. Win or lose, playing keeps her company and she
+  jumps for joy.
 - **Sounds.** Little 8-bit beeps, which you can turn off in the menu.
 
 Your game is saved in your browser, so each phone or computer has its own Betula.
 
 ## Coming soon in version 1.1
 
-- Left or right: a little guessing game with a bird
-- Gentle animations: swaying, happy jumps, sleeping and growing up
+- Gentle animations: swaying, growing up and a gift reveal
 
 ## Made with
 

@@ -41,6 +41,8 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 
 ## Tech
 - Plain HTML, CSS and JavaScript: index.html, style.css and game.js. Split into more files only if needed.
+- Mini-games live in their own files in minigames/, loaded before game.js. Each one is an object with four functions: start(tools, now) returns its state, press(state, side, now) takes "left" or "right", draw(state, screen, now) draws it, and getResult(state, now) returns null while playing and { won, score, total } when it is over.
+- A mini-game never touches game.js directly: it only uses the tools it gets in start() (drawing, text, sounds, random numbers and the screen area it may use). game.js opens it, passes it the taps and buttons (Back closes it), and gives the reward.
 - Hosted on GitHub Pages at berkanagames.com/betula-grows.
 
 ## Out of scope for now
@@ -63,7 +65,7 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 - The Attention icon is not a button: it lights up when Betula needs something.
 
 ### Icons
-- Menu: opens inside the LCD screen in place of Betula, drawn in pixel art, as pages browsed with left and right arrows (Select also turns the page, Back closes the menu). The first page shows the sun, water and company bars. The last page is always reset, with an "ERASE ALL?" question where NO is chosen first. The pages for stats (age, current stage, lives lived, gifts collected), chores (leaves swept, pests cured), the gift collection and sound on/off go between them.
+- Menu: opens inside the LCD screen in place of Betula, drawn in pixel art, as pages browsed with left and right arrows (Select also turns the page, Back closes the menu). The first page shows the sun, water and company bars. The last page is always reset, with an "ERASE ALL?" question where NO is chosen first. The pages for stats (age, current stage, lives lived, gifts collected), chores (leaves swept, pests cured), games (played, won), the gift collection and sound on/off go between them.
 - Sun: refills the sun need. Does nothing at night, because Betula is sleeping.
 - Water: refills the water need.
 - Heart: opens the left-or-right mini-game.
@@ -88,6 +90,9 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 ### Mini-game: left or right
 - Opened with the Heart icon. A bird appears on the left or on the right and the player guesses which side. 5 rounds.
 - Winning raises the company need.
+- Winning (3 or more right) gives +60 company, losing still gives +20, and Betula jumps for joy either way. A game left with Back gives nothing and is not counted.
+- Controls: tap the left or right half of the screen, or Select (left), OK (right) and Back (leave).
+- The Heart does not open it while Betula sleeps.
 
 ### Sounds
 - 8-bit sounds generated in code with the Web Audio API. No audio files.
