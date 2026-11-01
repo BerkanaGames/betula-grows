@@ -332,7 +332,7 @@ const ARROW_SPRITES = {
 // The menu is drawn in the screen in place of Betula, as pages browsed with the arrows.
 // The first page shows the needs; the reset page is always the last one,
 // so new pages go between them.
-const MENU_PAGES = ["needs", "stats", "gifts", "sound", "reset"];
+const MENU_PAGES = ["needs", "stats", "chores", "gifts", "sound", "reset"];
 const MENU_TOP = 9;
 const MENU_BOTTOM = 38;
 const MENU_ARROW_TOP = 19;
@@ -355,6 +355,12 @@ const NEEDS_PAGE_BAR_HEIGHT = 5;
 // Stats page: four centered lines of text.
 const STATS_PAGE_TOP = 11;
 const STATS_PAGE_LINE_SPACING = 6;
+
+// Chores page: a leaf with the leaves swept, and a bug with the pests cured.
+const CHORES_PAGE_LEAF_TOP = 12;
+const CHORES_PAGE_SWEPT_TOP = 16;
+const CHORES_PAGE_BUG_TOP = 24;
+const CHORES_PAGE_CURED_TOP = 27;
 
 // Gifts page: the 8 gifts in two rows of four, dark if found and a dim "?" if not.
 const GIFTS_PAGE_COLUMNS = 4;
@@ -1096,6 +1102,8 @@ function placeMenu(screen) {
     placeNeedsPage(screen);
   } else if (page === "stats") {
     placeStatsPage(screen);
+  } else if (page === "chores") {
+    placeChoresPage(screen);
   } else if (page === "gifts") {
     placeGiftsPage(screen);
   } else if (page === "sound") {
@@ -1180,6 +1188,16 @@ function placeStatsPage(screen) {
   lines.forEach((line, index) => {
     placeText(screen, line, getCenteredLeft(getTextWidth(line)), STATS_PAGE_TOP + index * STATS_PAGE_LINE_SPACING);
   });
+}
+
+function placeChoresPage(screen) {
+  const bug = PEST_FRAMES[0];
+  const swept = `SWEPT ${formatCount(save.leavesSwept)}`;
+  const cured = `CURED ${formatCount(save.pestsCured)}`;
+  placeSprite(screen, LEAF_SPRITE, getCenteredLeft(LEAF_SPRITE[0].length), CHORES_PAGE_LEAF_TOP);
+  placeText(screen, swept, getCenteredLeft(getTextWidth(swept)), CHORES_PAGE_SWEPT_TOP);
+  placeSprite(screen, bug, getCenteredLeft(bug[0].length), CHORES_PAGE_BUG_TOP);
+  placeText(screen, cured, getCenteredLeft(getTextWidth(cured)), CHORES_PAGE_CURED_TOP);
 }
 
 function placeGiftsPage(screen) {
