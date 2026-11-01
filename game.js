@@ -333,7 +333,7 @@ const ARROW_SPRITES = {
 // The menu is drawn in the screen in place of Betula, as pages browsed with the arrows.
 // The first page shows the needs; the reset page is always the last one,
 // so new pages go between them.
-const MENU_PAGES = ["needs", "stats", "chores", "gifts", "sound", "reset"];
+const MENU_PAGES = ["needs", "stats", "chores", "games", "gifts", "sound", "reset"];
 const MENU_TOP = 9;
 const MENU_BOTTOM = 38;
 const MENU_ARROW_TOP = 19;
@@ -362,6 +362,11 @@ const CHORES_PAGE_LEAF_TOP = 12;
 const CHORES_PAGE_SWEPT_TOP = 16;
 const CHORES_PAGE_BUG_TOP = 24;
 const CHORES_PAGE_CURED_TOP = 27;
+
+// Games page: a heart with the mini-games played and won.
+const GAMES_PAGE_HEART_TOP = 12;
+const GAMES_PAGE_PLAYED_TOP = 19;
+const GAMES_PAGE_WON_TOP = 26;
 
 // Gifts page: the 8 gifts in two rows of four, dark if found and a dim "?" if not.
 const GIFTS_PAGE_COLUMNS = 4;
@@ -910,6 +915,8 @@ function createNewSave(now) {
     hasPests: false,
     lastPestCheckTime: now,
     pestsCured: 0,
+    gamesPlayed: 0,
+    gamesWon: 0,
   };
 }
 
@@ -957,6 +964,10 @@ if (save.hasPests === undefined) {
   save.hasPests = false;
   save.lastPestCheckTime = save.lastUpdateTime;
   save.pestsCured = 0;
+}
+if (save.gamesPlayed === undefined) {
+  save.gamesPlayed = 0;
+  save.gamesWon = 0;
 }
 // Test parameter: ?pests=1 brings pests right away, so they can be tested without waiting.
 if (new URLSearchParams(window.location.search).get("pests") === "1") {
@@ -1108,6 +1119,8 @@ function placeMenu(screen) {
     placeStatsPage(screen);
   } else if (page === "chores") {
     placeChoresPage(screen);
+  } else if (page === "games") {
+    placeGamesPage(screen);
   } else if (page === "gifts") {
     placeGiftsPage(screen);
   } else if (page === "sound") {
@@ -1202,6 +1215,15 @@ function placeChoresPage(screen) {
   placeText(screen, swept, getCenteredLeft(getTextWidth(swept)), CHORES_PAGE_SWEPT_TOP);
   placeSprite(screen, bug, getCenteredLeft(bug[0].length), CHORES_PAGE_BUG_TOP);
   placeText(screen, cured, getCenteredLeft(getTextWidth(cured)), CHORES_PAGE_CURED_TOP);
+}
+
+function placeGamesPage(screen) {
+  const heart = findScreenIcon("heart").sprite;
+  const played = `GAMES ${formatCount(save.gamesPlayed)}`;
+  const won = `WON ${formatCount(save.gamesWon)}`;
+  placeSprite(screen, heart, getCenteredLeft(heart[0].length), GAMES_PAGE_HEART_TOP);
+  placeText(screen, played, getCenteredLeft(getTextWidth(played)), GAMES_PAGE_PLAYED_TOP);
+  placeText(screen, won, getCenteredLeft(getTextWidth(won)), GAMES_PAGE_WON_TOP);
 }
 
 function placeGiftsPage(screen) {
@@ -1401,9 +1423,9 @@ function render() {
   const face = FACES[stage.face.size][mood];
   const screen = createGrid(SCREEN_ROWS, SCREEN_COLUMNS);
 
-  // Center the sprite and let its last empty row sit on the ground line.
+  // Center the sprite and let its last empty row sit on the ground line, unless she is jumping.
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
-  const top = GROUND_ROW - sprite.length + 1;
+  const top = GROUND_ROW - sprite.length + 1 - getJumpHeight(now);
 
   // A mini-game that has just ended gives its result before this frame is drawn.
   if (minigame) {
@@ -1673,6 +1695,14 @@ const MINIGAME_TOOLS = {
 const HEART_MINIGAME = LEFT_OR_RIGHT;
 const MINIGAME_FRAME_INTERVAL = 100;
 
+// Playing always helps: a win raises company a lot, a loss a little.
+const MINIGAME_WIN_COMPANY = 60;
+const MINIGAME_PLAY_COMPANY = 20;
+
+// After a game Betula jumps for joy: two little hops.
+const JUMP_DURATION = 900;
+const JUMP_HEIGHT = 2;
+
 // Starts a mini-game and redraws often while it is open, so its animations run smoothly.
 function openMinigame(game) {
   minigame = { game, state: game.start(MINIGAME_TOOLS, Date.now()) };
@@ -1690,8 +1720,25 @@ function closeMinigame() {
   minigame = null;
 }
 
-function finishMinigame() {
+// A finished game raises company, is counted in the stats, and makes Betula jump for joy.
+// The jump starts right after this redraw, so it is not drawn from inside it.
+function finishMinigame(result) {
+  updateNeeds(save, Date.now());
+  const reward = result.won ? MINIGAME_WIN_COMPANY : MINIGAME_PLAY_COMPANY;
+  save.needs.company = Math.min(NEED_FULL, save.needs.company + reward);
+  save.gamesPlayed++;
+  if (result.won) {
+    save.gamesWon++;
+  }
+  writeSave(save);
   closeMinigame();
+  setTimeout(() => playEffect("jump", JUMP_DURATION), 0);
+}
+
+// How many pixels Betula is lifted during the jump: two hops up and down.
+function getJumpHeight(now) {
+  const jump = getEffectProgress("jump", now);
+  return jump === null ? 0 : Math.round(JUMP_HEIGHT * Math.abs(Math.sin(jump * Math.PI * 2)));
 }
 
 // The needs are brought up to date first, so the time before the switch counts with the old light.

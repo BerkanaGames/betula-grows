@@ -141,5 +141,5 @@ const LEFT_OR_RIGHT = (() => {
     return { won: state.score >= ROUNDS_TO_WIN, score: state.score, total: ROUNDS };
   }
 
-  return { name: "left-or-right", birdSprite: BIRD_FRAMES[0], start, press, draw, getResult };
+  return { name: "left-or-right", start, press, draw, getResult };
 })();
