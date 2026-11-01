@@ -22,13 +22,15 @@ a small birch tree, from seed to birch in one cozy 24-hour life.
 - **Day and night.** Night falls at 21:00 on your own clock. Turn the lamp off
   and Betula sleeps until 6:00, and her needs drop more slowly while she dreams.
   Leave the light on and she gets grumpy.
+- **Leaves and pests.** Dry leaves pile up around her: sweep them with the broom.
+  Little bugs sometimes come, more often when she is not well cared for: spray
+  them away before her needs run low.
 - **Sounds.** Little 8-bit beeps, which you can turn off in the menu.
 
 Your game is saved in your browser, so each phone or computer has its own Betula.
 
 ## Coming soon in version 1.1
 
-- Fallen leaves to sweep and pests to spray away
 - Left or right: a little guessing game with a bird
 - Gentle animations: swaying, happy jumps, sleeping and growing up
 

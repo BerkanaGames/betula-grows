@@ -63,7 +63,7 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 - The Attention icon is not a button: it lights up when Betula needs something.
 
 ### Icons
-- Menu: opens inside the LCD screen in place of Betula, drawn in pixel art, as pages browsed with left and right arrows (Select also turns the page, Back closes the menu). The first page shows the sun, water and company bars. The last page is always reset, with an "ERASE ALL?" question where NO is chosen first. The pages for stats (age, current stage, lives lived, gifts collected), the gift collection and sound on/off go between them.
+- Menu: opens inside the LCD screen in place of Betula, drawn in pixel art, as pages browsed with left and right arrows (Select also turns the page, Back closes the menu). The first page shows the sun, water and company bars. The last page is always reset, with an "ERASE ALL?" question where NO is chosen first. The pages for stats (age, current stage, lives lived, gifts collected), chores (leaves swept, pests cured), the gift collection and sound on/off go between them.
 - Sun: refills the sun need. Does nothing at night, because Betula is sleeping.
 - Water: refills the water need.
 - Heart: opens the left-or-right mini-game.
@@ -78,12 +78,12 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 - Test parameter: ?hour=N forces the hour (for example ?hour=22) so night can be tested at any time.
 
 ### Fallen leaves
-- Dry leaves appear around Betula over time, also while the game is closed, up to a few on screen.
-- The Broom clears them. If too many pile up, Betula gets sad.
+- Dry leaves appear around Betula over time, also while the game is closed, up to a few on screen: one every 2 hours, day and night, up to 5.
+- The Broom clears them. If too many pile up (3 or more), Betula gets sad and the Attention icon lights up.
 
 ### Pests
-- Pests appear at random, more often when Betula is poorly cared for.
-- While she has pests, her needs drop faster. The Spray removes them.
+- Pests appear at random, more often when Betula is poorly cared for: every hour there is a 2% (well cared for) to 20% (neglected) chance. None appear while she sleeps.
+- While she has pests, her needs drop twice as fast and the Attention icon lights up. The Spray removes them.
 
 ### Mini-game: left or right
 - Opened with the Heart icon. A bird appears on the left or on the right and the player guesses which side. 5 rounds.
