@@ -553,10 +553,12 @@ const BOTTOM_ICONS_TOP = 41;
 const TOP_ICONS_TAP_LIMIT = 9;
 
 // Betula lives in real time. Speed mode for testing: ?speed=720 makes a full life last 2 minutes.
-// Test speeds use their own save, so tests never touch the real Betula.
+// Any test parameter (speed, hour or pests) uses its own save, so tests never touch the real Betula.
 const NORMAL_SPEED = 1;
+const TEST_PARAMETERS = ["speed", "hour", "pests"];
+const isTesting = TEST_PARAMETERS.some((name) => new URLSearchParams(window.location.search).has(name));
 const speed = readSpeed();
-const SAVE_KEY = speed === NORMAL_SPEED ? "betula-grows-v3" : "betula-grows-test";
+const SAVE_KEY = isTesting ? "betula-grows-test" : "betula-grows-v3";
 
 // Saves from older versions: their life is replaced by a new one, but their gifts are kept.
 const OLD_SAVE_KEYS = ["betula-grows", "betula-grows-v2"];
@@ -824,8 +826,8 @@ function createNewSave(now) {
 let save = loadSave();
 if (!save) {
   save = createNewSave(Date.now());
-  // Only the real game takes over old gifts; test speeds leave old saves alone.
-  if (speed === NORMAL_SPEED) {
+  // Only the real game takes over old gifts; tests leave old saves alone.
+  if (!isTesting) {
     save.collection = collectOldGifts();
     save.livesLived = countGifts(save.collection);
   }

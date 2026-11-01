@@ -36,7 +36,8 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 
 ## Testing
 - Speed mode: if the URL contains ?speed=N, time runs N times faster (?speed=720 makes a full life last 2 minutes). It is never active without the parameter.
-- Test speeds use their own save, so tests never touch the real Betula.
+- Any test parameter (?speed, ?hour or ?pests) uses its own test save, so tests never touch the real Betula.
+- Test parameter: ?pests=1 gives Betula pests when the game opens, so they can be tested without waiting for chance.
 
 ## Tech
 - Plain HTML, CSS and JavaScript: index.html, style.css and game.js. Split into more files only if needed.
