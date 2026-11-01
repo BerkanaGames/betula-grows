@@ -526,7 +526,10 @@ const SAVE_KEY = speed === NORMAL_SPEED ? "betula-grows-v3" : "betula-grows-test
 const OLD_SAVE_KEYS = ["betula-grows", "betula-grows-v2"];
 const OLD_TEST_SAVE_KEY = "betula-grows-speed";
 
-const REDRAW_INTERVAL = 1000;
+const REDRAW_INTERVAL = 500;
+
+// The Attention icon switches between dark and dim this often while it is on.
+const ATTENTION_BLINK_INTERVAL = 500;
 
 function readSpeed() {
   const value = Number(new URLSearchParams(window.location.search).get("speed"));
@@ -665,6 +668,16 @@ function isSad(needs) {
   return NEEDS.some((need) => needs[need] < SAD_THRESHOLD);
 }
 
+// Each check is one reason for the Attention icon to light up.
+// Fallen leaves and pests will add their own checks here.
+const ATTENTION_CHECKS = [
+  (save) => isSad(save.needs),
+];
+
+function needsAttention(save) {
+  return ATTENTION_CHECKS.some((check) => check(save));
+}
+
 function getStage(age) {
   let current = STAGES[0];
   for (const stage of STAGES) {
@@ -777,11 +790,14 @@ function getIconPosition(index) {
 }
 
 // Like a real Tamagotchi, icons are dim and only the highlighted one is dark.
-function placeIcons(screen) {
+// The Attention icon blinks while Betula needs something.
+function placeIcons(screen, isAttentionOn) {
+  const isBlinkOn = Math.floor(Date.now() / ATTENTION_BLINK_INTERVAL) % 2 === 0;
   SCREEN_ICONS.forEach((icon, index) => {
     const { left, top } = getIconPosition(index);
     const isHighlighted = index === highlightedIcon;
-    placeSprite(screen, icon.sprite, left, top, isHighlighted ? PIXEL.on : PIXEL.dim);
+    const isBlinking = icon.name === "attention" && isAttentionOn && isBlinkOn;
+    placeSprite(screen, icon.sprite, left, top, isHighlighted || isBlinking ? PIXEL.on : PIXEL.dim);
   });
 }
 
@@ -1015,7 +1031,7 @@ function render() {
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
   const top = GROUND_ROW - sprite.length + 1;
 
-  placeIcons(screen);
+  placeIcons(screen, needsAttention(save));
   if (menuState.isOpen) {
     placeMenu(screen);
   } else {
