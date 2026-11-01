@@ -19,13 +19,15 @@ a small birch tree, from seed to birch in one cozy 24-hour life.
 - **Gifts.** At the end of each life Betula leaves you a gift and starts again
   as a seed. The better you cared for her, the better the chance of a rare one.
   Gifts stay in your collection forever: find them in the menu, next to her stats.
+- **Day and night.** Night falls at 21:00 on your own clock. Turn the lamp off
+  and Betula sleeps until 6:00, and her needs drop more slowly while she dreams.
+  Leave the light on and she gets grumpy.
 - **Sounds.** Little 8-bit beeps, which you can turn off in the menu.
 
 Your game is saved in your browser, so each phone or computer has its own Betula.
 
 ## Coming soon in version 1.1
 
-- Day and night: a lamp, and Betula sleeping through the night
 - Fallen leaves to sweep and pests to spray away
 - Left or right: a little guessing game with a bird
 - Gentle animations: swaying, happy jumps, sleeping and growing up
