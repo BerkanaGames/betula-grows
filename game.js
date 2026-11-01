@@ -555,9 +555,26 @@ const LEAF_SPRITE = [
 // Where each leaf lands, in falling order: alternating sides, around Betula's roots.
 const LEAF_SLOTS = [8, 36, 2, 42, 30];
 
+// Pests: every PEST_CHECK_INTERVAL of game time there is a chance they come, from
+// PEST_CHANCE_CARED (all needs full) to PEST_CHANCE_NEGLECTED (all needs empty).
+// No pests come while Betula sleeps. While she has them, needs drop PEST_DROP_FACTOR times faster.
+const PEST_CHECK_INTERVAL = HOUR;
+const PEST_CHANCE_CARED = 0.02;
+const PEST_CHANCE_NEGLECTED = 0.2;
+const PEST_DROP_FACTOR = 2;
+
+// A tiny bug that moves its legs: two frames that take turns.
+const PEST_FRAMES = [
+  [".#.", "#.#"],
+  ["#.#", ".#."],
+];
+const PEST_FRAME_INTERVAL = 400;
+
 // Short animations that play after using an icon, drawn many times a second.
 const EFFECT_FRAME_INTERVAL = 60;
 const SWEEP_DURATION = 900;
+const SPRAY_DURATION = 800;
+const SPRAY_FRAME_INTERVAL = 120;
 
 // Layout of the icon rows: 4 slots of 12 columns each, with the icon in the middle of its slot.
 const ICONS_PER_ROW = 4;
@@ -717,16 +734,21 @@ function finishEndedLives(save, now) {
   return giftsLeft;
 }
 
-// Brings the needs up to date, one stretch of day or night at a time,
-// because each 6:00 turns the light on and the night can change how fast needs drop.
+// Brings the needs up to date, one stretch at a time: each 6:00 turns the light on,
+// the night can change how fast needs drop, and every game hour pests may come.
 function updateNeeds(save, now) {
   let time = save.lastUpdateTime;
   while (time < now) {
     const next = getNextDayOrNightStart(time);
-    const stretchEnd = Math.min(next.realTime, now);
+    const nextPestCheck = save.lastPestCheckTime + PEST_CHECK_INTERVAL / speed;
+    const stretchEnd = Math.max(time, Math.min(next.realTime, nextPestCheck, now));
     lowerNeeds(save, (stretchEnd - time) * speed, getNeedDropFactor(save, time));
     if (stretchEnd === next.realTime && next.isDayStart) {
       save.lightOn = true;
+    }
+    if (nextPestCheck <= stretchEnd) {
+      checkForPests(save, nextPestCheck);
+      save.lastPestCheckTime = nextPestCheck;
     }
     time = stretchEnd;
   }
@@ -740,7 +762,25 @@ function isSleepingAt(save, realTime) {
 
 // How fast needs drop at a moment, compared with normal.
 function getNeedDropFactor(save, realTime) {
-  return isSleepingAt(save, realTime) ? SLEEP_DROP_FACTOR : 1;
+  const sleepFactor = isSleepingAt(save, realTime) ? SLEEP_DROP_FACTOR : 1;
+  const pestFactor = save.hasPests ? PEST_DROP_FACTOR : 1;
+  return sleepFactor * pestFactor;
+}
+
+function getAverageNeed(needs) {
+  return NEEDS.reduce((total, need) => total + needs[need], 0) / NEEDS.length;
+}
+
+// The worse Betula is cared for, the more likely pests come. None come while she sleeps.
+function checkForPests(save, realTime) {
+  if (save.hasPests || isSleepingAt(save, realTime)) {
+    return;
+  }
+  const care = getAverageNeed(save.needs) / NEED_FULL;
+  const chance = PEST_CHANCE_NEGLECTED + (PEST_CHANCE_CARED - PEST_CHANCE_NEGLECTED) * care;
+  if (Math.random() < chance) {
+    save.hasPests = true;
+  }
 }
 
 // Lowers every need by some game time, and adds the care given in that time to the life's care total.
@@ -828,6 +868,7 @@ const ATTENTION_CHECKS = [
   // From 21:00, a reminder to turn the light off, like the original Tamagotchi.
   (save, now) => isGrumpyAt(save, now),
   (save) => hasTooManyLeaves(save),
+  (save) => save.hasPests,
 ];
 
 function needsAttention(save, now) {
@@ -859,6 +900,9 @@ function createNewSave(now) {
     leaves: 0,
     lastLeafTime: now,
     leavesSwept: 0,
+    hasPests: false,
+    lastPestCheckTime: now,
+    pestsCured: 0,
   };
 }
 
@@ -900,6 +944,16 @@ if (save.leaves === undefined) {
   save.leaves = 0;
   save.lastLeafTime = save.lastUpdateTime;
   save.leavesSwept = 0;
+}
+// Pest checks start from the last time the save was updated.
+if (save.hasPests === undefined) {
+  save.hasPests = false;
+  save.lastPestCheckTime = save.lastUpdateTime;
+  save.pestsCured = 0;
+}
+// Test parameter: ?pests=1 brings pests right away, so they can be tested without waiting.
+if (new URLSearchParams(window.location.search).get("pests") === "1") {
+  save.hasPests = true;
 }
 writeSave(save);
 
@@ -1222,6 +1276,36 @@ function placeLeaves(screen, now) {
   }
 }
 
+// Two bugs on Betula, beside her face, and two on the ground near her roots, all moving their legs.
+// While the spray works, the bugs stay for the first half and a cloud of mist flickers around her.
+function placePests(screen, faceLeft, faceTop, faceWidth, now) {
+  const spray = getEffectProgress("spray", now);
+  const showBugs = save.hasPests || (spray !== null && effect.hadPests && spray < 0.5);
+  if (showBugs) {
+    const frame = PEST_FRAMES[Math.floor(now / PEST_FRAME_INTERVAL) % PEST_FRAMES.length];
+    const center = Math.floor(SCREEN_COLUMNS / 2);
+    const bugPositions = [
+      [faceLeft - 4, faceTop + 1],
+      [faceLeft + faceWidth + 1, faceTop + 3],
+      [center - 9, GROUND_ROW - 2],
+      [center + 5, GROUND_ROW - 2],
+    ];
+    bugPositions.forEach(([bugLeft, bugTop]) => placeSprite(screen, frame, bugLeft, bugTop));
+  }
+
+  if (spray !== null) {
+    const mistFrame = Math.floor((now - effect.startTime) / SPRAY_FRAME_INTERVAL) % 2;
+    for (let row = faceTop - 4; row <= GROUND_ROW - 1; row += 2) {
+      for (let column = faceLeft - 7; column <= faceLeft + faceWidth + 7; column += 2) {
+        // Every other drop lights up in each frame, so the mist seems to move.
+        if ((row + column) % 4 === mistFrame * 2 && isInsideGrid(screen, row, column)) {
+          screen[row][column] = PIXEL.on;
+        }
+      }
+    }
+  }
+}
+
 // Two frames that take turns: a big Z, then the big Z with a small z rising up and to the right.
 function placeSleepingZs(screen, left, top, now) {
   placeText(screen, "Z", left, top + 3);
@@ -1310,6 +1394,7 @@ function render() {
     if (isSleeping) {
       placeSleepingZs(screen, left + sprite[0].length + 1, top + stage.face.top - 6, now);
     }
+    placePests(screen, left + stage.face.left, top + stage.face.top, face[0].length, now);
   }
   drawGrid(context, screen, getScreenBackground(save, now));
 }
@@ -1326,6 +1411,7 @@ const SOUNDS = {
   lightOn: [[440, 0.04], [880, 0.06]],
   lightOff: [[880, 0.04], [440, 0.06]],
   sweep: [[1400, 0.03], [1100, 0.03], [900, 0.03], [700, 0.03], [500, 0.05]],
+  spray: [[1568, 0.03], [0, 0.02], [1760, 0.03], [0, 0.02], [1568, 0.03], [0, 0.02], [1760, 0.04]],
   blocked: [[196, 0.12]],
 };
 const SOUND_VOLUME = 0.06;
@@ -1476,6 +1562,10 @@ function useIcon(index) {
     sweepLeaves();
     return;
   }
+  if (icon.name === "spray") {
+    sprayPests();
+    return;
+  }
   // At night Betula is resting, so she cannot take sun.
   if (icon.name === "sun" && isNightAt(Date.now())) {
     playSound("blocked");
@@ -1504,6 +1594,20 @@ function sweepLeaves() {
   writeSave(save);
   playSound("sweep");
   playEffect("sweep", SWEEP_DURATION, { sweptLeaves });
+}
+
+// The spray always mists Betula, so the tap feels answered; it only counts a cure if there were pests.
+// The needs are brought up to date first, so the time before spraying counts with the pests.
+function sprayPests() {
+  updateNeeds(save, Date.now());
+  const hadPests = save.hasPests;
+  if (hadPests) {
+    save.hasPests = false;
+    save.pestsCured++;
+  }
+  writeSave(save);
+  playSound("spray");
+  playEffect("spray", SPRAY_DURATION, { hadPests });
 }
 
 // The needs are brought up to date first, so the time before the switch counts with the old light.
