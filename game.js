@@ -11,7 +11,10 @@ const CELL_GAP = 1;
 const PIXEL = { off: 0, dim: 1, on: 2 };
 
 const LCD_COLORS = {
+  // The screen is light by day, a little darker at night, and darkest with the light off.
   background: "#c4cfa1",
+  backgroundNight: "#aab587",
+  backgroundLightOff: "#8d9870",
   pixelOn: "#1f2a1a",
   pixelDim: "rgba(31, 42, 26, 0.3)",
   pixelOff: "rgba(31, 42, 26, 0.07)",
@@ -536,6 +539,58 @@ function readSpeed() {
   return Number.isFinite(value) && value > 0 ? value : NORMAL_SPEED;
 }
 
+// Day and night follow the player's local clock: day from 6:00 to 21:00, night from 21:00 to 6:00.
+const DAY_START_HOUR = 6;
+const NIGHT_START_HOUR = 21;
+
+// In speed mode the clock runs faster too. It is counted from this fixed moment,
+// so the same real time always gives the same clock time, also between visits.
+const CLOCK_ANCHOR = Date.UTC(2026, 0, 1);
+
+// Test parameter: ?hour=N moves the clock so the game opens at N:00. It works with ?speed=N.
+const clockOffset = readClockOffset();
+
+function readClockOffset() {
+  const hour = Number(new URLSearchParams(window.location.search).get("hour") ?? NaN);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    return 0;
+  }
+  const clockNow = CLOCK_ANCHOR + (Date.now() - CLOCK_ANCHOR) * speed;
+  const opening = new Date(clockNow);
+  opening.setHours(hour, 0, 0, 0);
+  return opening.getTime() - clockNow;
+}
+
+// Converts a real moment into the game clock, and back.
+function getClockTime(realTime) {
+  return CLOCK_ANCHOR + (realTime - CLOCK_ANCHOR) * speed + clockOffset;
+}
+
+function getRealTime(clockTime) {
+  return CLOCK_ANCHOR + (clockTime - clockOffset - CLOCK_ANCHOR) / speed;
+}
+
+function isNightAt(realTime) {
+  const hour = new Date(getClockTime(realTime)).getHours();
+  return hour >= NIGHT_START_HOUR || hour < DAY_START_HOUR;
+}
+
+// The next 6:00 or 21:00 after a real moment, and whether it is the start of the day.
+function getNextDayOrNightStart(realTime) {
+  const clock = new Date(getClockTime(realTime));
+  const starts = [DAY_START_HOUR, NIGHT_START_HOUR].map((hour) => {
+    const start = new Date(clock);
+    start.setHours(hour, 0, 0, 0);
+    if (start <= clock) {
+      start.setDate(start.getDate() + 1);
+    }
+    return { clockTime: start.getTime(), isDayStart: hour === DAY_START_HOUR };
+  });
+  const next = starts[0].clockTime < starts[1].clockTime ? starts[0] : starts[1];
+  // Rounding can never return a moment that is not in the future.
+  return { realTime: Math.max(realTime + 1, getRealTime(next.clockTime)), isDayStart: next.isDayStart };
+}
+
 // Gathers the gift collections of older saves into one, then removes those saves.
 function collectOldGifts() {
   const collection = {};
@@ -610,11 +665,30 @@ function finishEndedLives(save, now) {
   return giftsLeft;
 }
 
-// Lowers every need by the game time passed since the last update,
-// and adds the care given in that time to the life's care total.
+// Brings the needs up to date, one stretch of day or night at a time,
+// because each 6:00 turns the light on and the night can change how fast needs drop.
 function updateNeeds(save, now) {
-  const elapsed = Math.max(0, (now - save.lastUpdateTime) * speed);
-  const dropPerMillisecond = NEED_FULL / NEED_EMPTY_DURATION;
+  let time = save.lastUpdateTime;
+  while (time < now) {
+    const next = getNextDayOrNightStart(time);
+    const stretchEnd = Math.min(next.realTime, now);
+    lowerNeeds(save, (stretchEnd - time) * speed, getNeedDropFactor(save, time));
+    if (stretchEnd === next.realTime && next.isDayStart) {
+      save.lightOn = true;
+    }
+    time = stretchEnd;
+  }
+  save.lastUpdateTime = Math.max(save.lastUpdateTime, now);
+}
+
+// How fast needs drop right now, compared with normal.
+function getNeedDropFactor() {
+  return 1;
+}
+
+// Lowers every need by some game time, and adds the care given in that time to the life's care total.
+function lowerNeeds(save, elapsed, dropFactor) {
+  const dropPerMillisecond = (NEED_FULL / NEED_EMPTY_DURATION) * dropFactor;
   let careGiven = 0;
 
   NEEDS.forEach((need) => {
@@ -633,7 +707,6 @@ function updateNeeds(save, now) {
   });
 
   save.careTotal += careGiven / NEEDS.length;
-  save.lastUpdateTime = now;
 }
 
 // The average level of all needs over a whole life, from 0 to 100.
@@ -699,6 +772,7 @@ function createNewSave(now) {
     newGifts: [],
     livesLived: 0,
     soundOn: true,
+    lightOn: true,
   };
 }
 
@@ -731,6 +805,9 @@ if (save.livesLived === undefined) {
 }
 if (save.soundOn === undefined) {
   save.soundOn = true;
+}
+if (save.lightOn === undefined) {
+  save.lightOn = true;
 }
 writeSave(save);
 
@@ -1004,10 +1081,17 @@ function placeResetPage(screen) {
   );
 }
 
+function getScreenBackground(save, now) {
+  if (!save.lightOn) {
+    return LCD_COLORS.backgroundLightOff;
+  }
+  return isNightAt(now) ? LCD_COLORS.backgroundNight : LCD_COLORS.background;
+}
+
 // Paints every LCD pixel on a canvas: dark if on, half-dark if dim, a faint "ghost" if off.
-function drawGrid(drawingContext, grid) {
+function drawGrid(drawingContext, grid, background) {
   const { canvas: target } = drawingContext;
-  drawingContext.fillStyle = LCD_COLORS.background;
+  drawingContext.fillStyle = background;
   drawingContext.fillRect(0, 0, target.width, target.height);
 
   const colors = [LCD_COLORS.pixelOff, LCD_COLORS.pixelDim, LCD_COLORS.pixelOn];
@@ -1061,7 +1145,7 @@ function render() {
     placeSprite(screen, sprite, left, top);
     placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
   }
-  drawGrid(context, screen);
+  drawGrid(context, screen, getScreenBackground(save, now));
 }
 
 // 8-bit sounds made with the Web Audio API: short square-wave notes, no audio files.
@@ -1072,6 +1156,9 @@ const SOUNDS = {
   grow: [[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.18]],
   gift: [[784, 0.1], [988, 0.1], [1175, 0.1], [1568, 0.26]],
   attention: [[1319, 0.08], [0, 0.06], [1319, 0.08]],
+  lightOn: [[440, 0.04], [880, 0.06]],
+  lightOff: [[880, 0.04], [440, 0.06]],
+  blocked: [[196, 0.12]],
 };
 const SOUND_VOLUME = 0.06;
 const SOUND_SILENCE = 0.0001;
@@ -1200,9 +1287,9 @@ function useIcon(index) {
     return;
   }
   highlightedIcon = index;
-  playSound(icon.name === "sun" || icon.name === "water" ? "refill" : "tap");
 
   if (icon.name === "menu") {
+    playSound("tap");
     if (menuState.isOpen) {
       closeMenu();
     } else {
@@ -1213,12 +1300,34 @@ function useIcon(index) {
   }
 
   closeMenu();
+  if (icon.name === "lamp") {
+    toggleLight();
+    return;
+  }
+  // At night Betula is resting, so she cannot take sun.
+  if (icon.name === "sun" && isNightAt(Date.now())) {
+    playSound("blocked");
+    render();
+    return;
+  }
+
   const need = ICON_NEEDS[icon.name];
   if (need) {
+    playSound(icon.name === "sun" || icon.name === "water" ? "refill" : "tap");
     refillNeed(need);
   } else {
+    playSound("tap");
     render();
   }
+}
+
+// The needs are brought up to date first, so the time before the switch counts with the old light.
+function toggleLight() {
+  updateNeeds(save, Date.now());
+  save.lightOn = !save.lightOn;
+  writeSave(save);
+  playSound(save.lightOn ? "lightOn" : "lightOff");
+  render();
 }
 
 // Moves the highlight to the next icon that can be used, skipping Attention.
