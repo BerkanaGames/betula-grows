@@ -272,8 +272,8 @@ const SCREEN_ICONS = [
   },
 ];
 
-// Sun, Water and Heart each refill one need.
-const ICON_NEEDS = { sun: "sun", water: "water", heart: "company" };
+// Sun and Water each refill one need. Company goes up by playing the Heart mini-game.
+const ICON_NEEDS = { sun: "sun", water: "water" };
 
 // A 3×5 pixel font for text inside the screen. Each character is its 5 rows, separated by commas.
 const FONT_ROWS = {
@@ -315,6 +315,7 @@ const FONT_ROWS = {
   9: "###,#.#,###,..#,###",
   "?": "###,..#,.##,...,.#.",
   "!": ".#.,.#.,.#.,...,.#.",
+  "/": "..#,..#,.#.,#..,#..",
   " ": "...,...,...,...,...",
 };
 const FONT = Object.fromEntries(
@@ -980,6 +981,9 @@ let wasSleeping = null;
 // The animation playing right now, if any: { name, duration, startTime, ... }.
 let effect = null;
 
+// The mini-game being played, if any: { game, state }. It is drawn in place of Betula.
+let minigame = null;
+
 const canvas = document.getElementById("screen");
 const context = canvas.getContext("2d");
 
@@ -1401,8 +1405,18 @@ function render() {
   const left = Math.floor((SCREEN_COLUMNS - sprite[0].length) / 2);
   const top = GROUND_ROW - sprite.length + 1;
 
+  // A mini-game that has just ended gives its result before this frame is drawn.
+  if (minigame) {
+    const result = minigame.game.getResult(minigame.state, now);
+    if (result) {
+      finishMinigame(result);
+    }
+  }
+
   placeIcons(screen, isAttentionOn);
-  if (menuState.isOpen) {
+  if (minigame) {
+    minigame.game.draw(minigame.state, screen, now);
+  } else if (menuState.isOpen) {
     placeMenu(screen);
   } else {
     placeGround(screen);
@@ -1456,11 +1470,16 @@ function startAudio() {
 });
 
 function playSound(name) {
+  playNotes(SOUNDS[name]);
+}
+
+// Plays a list of [frequency, duration] notes; mini-games use it for their own melodies.
+function playNotes(notes) {
   if (!save.soundOn || !audioContext) {
     return;
   }
   let time = audioContext.currentTime;
-  SOUNDS[name].forEach(([frequency, duration]) => {
+  notes.forEach(([frequency, duration]) => {
     if (frequency > 0) {
       const oscillator = audioContext.createOscillator();
       const volume = audioContext.createGain();
@@ -1584,6 +1603,17 @@ function useIcon(index) {
     sprayPests();
     return;
   }
+  // A sleeping Betula cannot play.
+  if (icon.name === "heart") {
+    if (isSleepingAt(save, Date.now())) {
+      playSound("blocked");
+      render();
+    } else {
+      playSound("tap");
+      openMinigame(HEART_MINIGAME);
+    }
+    return;
+  }
   // At night Betula is resting, so she cannot take sun.
   if (icon.name === "sun" && isNightAt(Date.now())) {
     playSound("blocked");
@@ -1628,6 +1658,42 @@ function sprayPests() {
   playEffect("spray", SPRAY_DURATION, { hadPests });
 }
 
+// Mini-games (see minigames/left-or-right.js) get these tools to draw and play sounds,
+// and the part of the screen between the two icon rows to draw in.
+const MINIGAME_TOOLS = {
+  placeSprite,
+  placeText,
+  getTextWidth,
+  getCenteredLeft,
+  playNotes,
+  random: Math.random,
+  PIXEL,
+  area: { top: MENU_TOP, bottom: MENU_BOTTOM, columns: SCREEN_COLUMNS },
+};
+const HEART_MINIGAME = LEFT_OR_RIGHT;
+const MINIGAME_FRAME_INTERVAL = 100;
+
+// Starts a mini-game and redraws often while it is open, so its animations run smoothly.
+function openMinigame(game) {
+  minigame = { game, state: game.start(MINIGAME_TOOLS, Date.now()) };
+  const drawFrame = () => {
+    if (minigame) {
+      render();
+      setTimeout(drawFrame, MINIGAME_FRAME_INTERVAL);
+    }
+  };
+  drawFrame();
+}
+
+// Leaving with Back: the game was not finished, so it gives nothing and is not counted.
+function closeMinigame() {
+  minigame = null;
+}
+
+function finishMinigame() {
+  closeMinigame();
+}
+
 // The needs are brought up to date first, so the time before the switch counts with the old light.
 function toggleLight() {
   updateNeeds(save, Date.now());
@@ -1648,6 +1714,12 @@ function selectNextIcon() {
 
 // In the menu, Select turns the page, or switches between NO and YES.
 function pressSelect() {
+  // In a mini-game, Select is "left"; the game plays its own sounds.
+  if (minigame) {
+    minigame.game.press(minigame.state, "left", Date.now());
+    render();
+    return;
+  }
   playSound("tap");
   if (!menuState.isOpen) {
     selectNextIcon();
@@ -1661,6 +1733,12 @@ function pressSelect() {
 
 // In the menu, OK presses the button on the page, or answers the reset question.
 function pressOk() {
+  // In a mini-game, OK is "right".
+  if (minigame) {
+    minigame.game.press(minigame.state, "right", Date.now());
+    render();
+    return;
+  }
   if (!menuState.isOpen) {
     if (highlightedIcon !== null) {
       useIcon(highlightedIcon);
@@ -1683,7 +1761,9 @@ function pressOk() {
 // Back answers NO to the reset question, closes the menu, or clears the highlight.
 function pressBack() {
   playSound("tap");
-  if (menuState.isConfirmingReset) {
+  if (minigame) {
+    closeMinigame();
+  } else if (menuState.isConfirmingReset) {
     menuState.isConfirmingReset = false;
   } else if (menuState.isOpen) {
     closeMenu();
@@ -1731,6 +1811,15 @@ function findMenuTapTarget({ column, row }) {
 
 canvas.addEventListener("click", (event) => {
   const cell = getTappedCell(event);
+
+  // In a mini-game, a tap anywhere on the left or right half of the screen chooses that side.
+  if (minigame) {
+    const side = cell.column < SCREEN_COLUMNS / 2 ? "left" : "right";
+    minigame.game.press(minigame.state, side, Date.now());
+    render();
+    return;
+  }
+
   const index = findTappedIcon(cell);
   if (index !== null) {
     useIcon(index);
