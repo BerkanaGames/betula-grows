@@ -272,7 +272,7 @@ const FONT_ROWS = {
   2: "###,..#,###,#..,###",
   3: "###,..#,.##,..#,###",
   4: "#.#,#.#,###,..#,..#",
-  5: "###,#..,###,..#,###",
+  5: "###,#..,##.,..#,##.",
   6: "###,#..,###,#.#,###",
   7: "###,..#,..#,..#,..#",
   8: "###,#.#,###,#.#,###",
@@ -296,12 +296,12 @@ const ARROW_SPRITES = {
 // The menu is drawn in the screen in place of Betula, as pages browsed with the arrows.
 // The first page shows the needs; the reset page is always the last one,
 // so new pages go between them.
-const MENU_PAGES = ["needs", "reset"];
+const MENU_PAGES = ["needs", "stats", "gifts", "sound", "reset"];
 const MENU_TOP = 9;
 const MENU_BOTTOM = 38;
 const MENU_ARROW_TOP = 19;
 const MENU_ARROW_TAP_WIDTH = 7;
-const MENU_DOTS_ROW = 34;
+const MENU_DOTS_ROW = 36;
 
 // Needs page: one row per need, with its icon and a bar that shows its level.
 const NEEDS_PAGE_ROWS = [
@@ -315,6 +315,28 @@ const NEEDS_PAGE_ICON_LEFT = 9;
 const NEEDS_PAGE_BAR_LEFT = 17;
 const NEEDS_PAGE_BAR_WIDTH = 22;
 const NEEDS_PAGE_BAR_HEIGHT = 5;
+
+// Stats page: four centered lines of text.
+const STATS_PAGE_TOP = 11;
+const STATS_PAGE_LINE_SPACING = 6;
+
+// Gifts page: the 8 gifts in two rows of four, dark if found and a dim "?" if not.
+const GIFTS_PAGE_COLUMNS = 4;
+const GIFTS_PAGE_TOP = 13;
+const GIFTS_PAGE_GAP_X = 1;
+const GIFTS_PAGE_GAP_Y = 2;
+const GIFT_SIZE = 8;
+
+// Sound page: a speaker with the word SOUND, and an ON/OFF button below.
+const SOUND_PAGE_TITLE_TOP = 13;
+const SOUND_PAGE_BUTTON_TOP = 21;
+const SPEAKER_SPRITE = [
+  "..#..",
+  ".##.#",
+  "###..",
+  ".##.#",
+  "..#..",
+];
 
 // Reset page: one button, then a question with NO and YES.
 const RESET_BUTTON_TOP = 17;
@@ -574,6 +596,7 @@ function finishEndedLives(save, now) {
     const gift = pickGift(getCareScore(save));
     save.collection[gift.name] = (save.collection[gift.name] || 0) + 1;
     save.newGifts.push(gift.name);
+    save.livesLived++;
     giftsLeft++;
 
     save.lifeStartTime = lifeEndTime;
@@ -627,6 +650,10 @@ function findGift(name) {
   return GIFTS.find((gift) => gift.name === name);
 }
 
+function countGifts(collection) {
+  return Object.values(collection).reduce((total, count) => total + count, 0);
+}
+
 function refillNeed(need) {
   updateNeeds(save, Date.now());
   save.needs[need] = NEED_FULL;
@@ -657,6 +684,8 @@ function createNewSave(now) {
     careTotal: 0,
     collection: {},
     newGifts: [],
+    livesLived: 0,
+    soundOn: true,
   };
 }
 
@@ -666,6 +695,7 @@ if (!save) {
   // Only the real game takes over old gifts; test speeds leave old saves alone.
   if (speed === NORMAL_SPEED) {
     save.collection = collectOldGifts();
+    save.livesLived = countGifts(save.collection);
   }
 }
 // Saves from older versions of the game get the parts they are missing.
@@ -681,6 +711,13 @@ if (!save.collection) {
 }
 if (!save.newGifts) {
   save.newGifts = [];
+}
+// Every life leaves exactly one gift, so older saves can count their lives from the collection.
+if (save.livesLived === undefined) {
+  save.livesLived = countGifts(save.collection);
+}
+if (save.soundOn === undefined) {
+  save.soundOn = true;
 }
 writeSave(save);
 
@@ -810,6 +847,12 @@ function placeMenu(screen) {
   const page = MENU_PAGES[menuState.page];
   if (page === "needs") {
     placeNeedsPage(screen);
+  } else if (page === "stats") {
+    placeStatsPage(screen);
+  } else if (page === "gifts") {
+    placeGiftsPage(screen);
+  } else if (page === "sound") {
+    placeSoundPage(screen);
   } else if (page === "reset") {
     placeResetPage(screen);
   }
@@ -868,6 +911,52 @@ function placeNeedsPage(screen) {
   });
 }
 
+// Betula's age as short text: minutes during her first hour, then whole hours.
+function formatAge(age) {
+  const minutes = Math.floor(age / (60 * 1000));
+  return minutes < 60 ? `${minutes}M` : `${Math.floor(minutes / 60)}H`;
+}
+
+function placeStatsPage(screen) {
+  const age = getAge(save, Date.now());
+  const lines = [
+    `AGE ${formatAge(age)}`,
+    getStage(age).name.toUpperCase(),
+    `LIVES ${save.livesLived}`,
+    `GIFTS ${countGifts(save.collection)}`,
+  ];
+  lines.forEach((line, index) => {
+    placeText(screen, line, getCenteredLeft(getTextWidth(line)), STATS_PAGE_TOP + index * STATS_PAGE_LINE_SPACING);
+  });
+}
+
+function placeGiftsPage(screen) {
+  const totalWidth = GIFTS_PAGE_COLUMNS * GIFT_SIZE + (GIFTS_PAGE_COLUMNS - 1) * GIFTS_PAGE_GAP_X;
+  const left = getCenteredLeft(totalWidth);
+  GIFTS.forEach((gift, index) => {
+    const giftLeft = left + (index % GIFTS_PAGE_COLUMNS) * (GIFT_SIZE + GIFTS_PAGE_GAP_X);
+    const giftTop = GIFTS_PAGE_TOP + Math.floor(index / GIFTS_PAGE_COLUMNS) * (GIFT_SIZE + GIFTS_PAGE_GAP_Y);
+    if (save.collection[gift.name] > 0) {
+      placeSprite(screen, gift.sprite, giftLeft, giftTop);
+    } else {
+      placeSprite(screen, UNKNOWN_GIFT_SPRITE, giftLeft, giftTop, PIXEL.dim);
+    }
+  });
+}
+
+function placeSoundPage(screen) {
+  const title = "SOUND";
+  const titleGap = 2;
+  const titleWidth = SPEAKER_SPRITE[0].length + titleGap + getTextWidth(title);
+  const titleLeft = getCenteredLeft(titleWidth);
+  placeSprite(screen, SPEAKER_SPRITE, titleLeft, SOUND_PAGE_TITLE_TOP);
+  placeText(screen, title, titleLeft + SPEAKER_SPRITE[0].length + titleGap, SOUND_PAGE_TITLE_TOP);
+
+  const label = save.soundOn ? "ON" : "OFF";
+  const buttonLeft = getCenteredLeft(getScreenButtonWidth(label));
+  placeScreenButton(screen, label, buttonLeft, SOUND_PAGE_BUTTON_TOP, true, toggleSound);
+}
+
 function placeResetPage(screen) {
   if (!menuState.isConfirmingReset) {
     const width = getScreenButtonWidth("RESET");
@@ -913,7 +1002,6 @@ function render() {
   writeSave(save);
 
   if (giftsLeft > 0) {
-    renderShelf();
     showGiftMessage();
   }
 
@@ -936,45 +1024,6 @@ function render() {
     placeSprite(screen, face, left + stage.face.left, top + stage.face.top);
   }
   drawGrid(context, screen);
-}
-
-// Each shelf slot is a tiny LCD with a 1-pixel border around the 8×8 gift.
-const SHELF_SLOT_SIZE = 10;
-const shelf = document.getElementById("shelf");
-
-function renderShelf() {
-  shelf.replaceChildren();
-
-  GIFTS.forEach((gift) => {
-    const count = save.collection[gift.name] || 0;
-    const isFound = count > 0;
-
-    const slot = document.createElement("div");
-    slot.className = "shelf-slot";
-    slot.classList.toggle("rare", gift.rare && isFound);
-    slot.classList.toggle("missing", !isFound);
-    slot.setAttribute("role", "img");
-    slot.setAttribute("aria-label", isFound ? `${gift.name.replace("-", " ")}, ${count}` : "Not found yet");
-
-    const slotCanvas = document.createElement("canvas");
-    slotCanvas.className = "shelf-canvas";
-    slotCanvas.width = SHELF_SLOT_SIZE * CELL_SIZE;
-    slotCanvas.height = SHELF_SLOT_SIZE * CELL_SIZE;
-
-    const grid = createGrid(SHELF_SLOT_SIZE, SHELF_SLOT_SIZE);
-    placeSprite(grid, isFound ? gift.sprite : UNKNOWN_GIFT_SPRITE, 1, 1);
-    drawGrid(slotCanvas.getContext("2d"), grid);
-    slot.append(slotCanvas);
-
-    if (count > 1) {
-      const badge = document.createElement("span");
-      badge.className = "shelf-count";
-      badge.textContent = `×${count}`;
-      slot.append(badge);
-    }
-
-    shelf.append(slot);
-  });
 }
 
 // The message stays until it is tapped, also after closing the game.
@@ -1019,6 +1068,11 @@ function changeMenuPage(step) {
   menuState.page = (menuState.page + step + MENU_PAGES.length) % MENU_PAGES.length;
 }
 
+function toggleSound() {
+  save.soundOn = !save.soundOn;
+  writeSave(save);
+}
+
 // NO is chosen at first, so nothing is erased by accident.
 function startResetQuestion() {
   menuState.isConfirmingReset = true;
@@ -1033,12 +1087,14 @@ function answerResetQuestion(choice) {
   }
 }
 
+// Erases Betula and the collection, but keeps the sound setting: it is a preference, not progress.
 function resetGame() {
+  const { soundOn } = save;
   save = createNewSave(Date.now());
+  save.soundOn = soundOn;
   writeSave(save);
   closeMenu();
   highlightedIcon = null;
-  renderShelf();
   showGiftMessage();
 }
 
@@ -1099,9 +1155,12 @@ function pressOk() {
     }
     return;
   }
+  const page = MENU_PAGES[menuState.page];
   if (menuState.isConfirmingReset) {
     answerResetQuestion(menuState.resetChoice);
-  } else if (MENU_PAGES[menuState.page] === "reset") {
+  } else if (page === "sound") {
+    toggleSound();
+  } else if (page === "reset") {
     startResetQuestion();
   }
   render();
@@ -1178,7 +1237,6 @@ document.getElementById("back-button").addEventListener("click", pressBack);
 
 // The interval only redraws the screen; the stage and needs always come from saved times.
 render();
-renderShelf();
 showGiftMessage();
 setInterval(render, REDRAW_INTERVAL);
 document.addEventListener("visibilitychange", render);
