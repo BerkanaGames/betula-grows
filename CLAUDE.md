@@ -72,7 +72,7 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 
 ### Day and night
 - Day is from 6:00 to 21:00 and night from 21:00 to 6:00, in the player's local time.
-- At night with the light off, Betula sleeps (closed eyes and "Zzz") and her needs drop more slowly.
+- At night with the light off, Betula sleeps (closed eyes and "Zzz") and her needs drop 10 times more slowly, so a full night asleep uses about a fifth of each need.
 - At night with the light on, she can't sleep and gets grumpy.
 - Test parameter: ?hour=N forces the hour (for example ?hour=22) so night can be tested at any time.
 

@@ -177,7 +177,7 @@ const SMALL_Z_SPRITE = ["###", ".#.", "###"];
 const SLEEP_FRAME_INTERVAL = 1000;
 
 // While Betula sleeps, her needs drop this many times slower.
-const SLEEP_DROP_FACTOR = 0.25;
+const SLEEP_DROP_FACTOR = 0.1;
 
 // The 8 icons inside the LCD, as 5×5 sprites: 4 on top and 4 at the bottom, left to right.
 // Attention is not a button: it only lights up when Betula needs something.
