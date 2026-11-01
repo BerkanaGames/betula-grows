@@ -90,7 +90,7 @@ A tiny virtual-pet game in the spirit of the original Tamagotchi. You look after
 ### Mini-game: left or right
 - Opened with the Heart icon. A bird appears on the left or on the right and the player guesses which side. 5 rounds.
 - Winning raises the company need.
-- Winning (3 or more right) gives +60 company, losing still gives +20, and Betula jumps for joy either way. A game left with Back gives nothing and is not counted.
+- Winning (3 or more right) fills company to 100, losing still gives +20, and Betula jumps for joy either way. A game left with Back gives nothing and is not counted.
 - Controls: tap the left or right half of the screen, or Select (left), OK (right) and Back (leave).
 - The Heart does not open it while Betula sleeps.
 

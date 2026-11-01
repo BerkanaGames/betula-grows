@@ -1695,8 +1695,7 @@ const MINIGAME_TOOLS = {
 const HEART_MINIGAME = LEFT_OR_RIGHT;
 const MINIGAME_FRAME_INTERVAL = 100;
 
-// Playing always helps: a win raises company a lot, a loss a little.
-const MINIGAME_WIN_COMPANY = 60;
+// Playing always helps: a win fills company completely, a loss still raises it a little.
 const MINIGAME_PLAY_COMPANY = 20;
 
 // After a game Betula jumps for joy: two little hops.
@@ -1724,8 +1723,9 @@ function closeMinigame() {
 // The jump starts right after this redraw, so it is not drawn from inside it.
 function finishMinigame(result) {
   updateNeeds(save, Date.now());
-  const reward = result.won ? MINIGAME_WIN_COMPANY : MINIGAME_PLAY_COMPANY;
-  save.needs.company = Math.min(NEED_FULL, save.needs.company + reward);
+  save.needs.company = result.won
+    ? NEED_FULL
+    : Math.min(NEED_FULL, save.needs.company + MINIGAME_PLAY_COMPANY);
   save.gamesPlayed++;
   if (result.won) {
     save.gamesWon++;
