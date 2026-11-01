@@ -137,6 +137,12 @@ const FACES = {
       "......",
       "..##..",
     ],
+    grumpy: [
+      ".#..#.",
+      "......",
+      ".####.",
+      "......",
+    ],
   },
   large: {
     happy: [
@@ -154,6 +160,12 @@ const FACES = {
     sleep: [
       "##....##",
       "........",
+      "........",
+      "..####..",
+    ],
+    grumpy: [
+      "#......#",
+      ".#....#.",
       "........",
       "..####..",
     ],
@@ -767,14 +779,21 @@ function isSad(needs) {
   return NEEDS.some((need) => needs[need] < SAD_THRESHOLD);
 }
 
+// At night with the light on, Betula cannot sleep and gets grumpy.
+function isGrumpyAt(save, realTime) {
+  return isNightAt(realTime) && save.lightOn;
+}
+
 // Each check is one reason for the Attention icon to light up.
 // Fallen leaves and pests will add their own checks here.
 const ATTENTION_CHECKS = [
   (save) => isSad(save.needs),
+  // From 21:00, a reminder to turn the light off, like the original Tamagotchi.
+  (save, now) => isGrumpyAt(save, now),
 ];
 
-function needsAttention(save) {
-  return ATTENTION_CHECKS.some((check) => check(save));
+function needsAttention(save, now) {
+  return ATTENTION_CHECKS.some((check) => check(save, now));
 }
 
 function getStage(age) {
@@ -1150,7 +1169,7 @@ function render() {
   }
 
   const stage = getStage(getAge(save, now));
-  const isAttentionOn = needsAttention(save);
+  const isAttentionOn = needsAttention(save, now);
   const isSleeping = isSleepingAt(save, now);
 
   // Sounds for things that happen by themselves: a gift, growing up, falling asleep,
@@ -1172,6 +1191,8 @@ function render() {
   let mood = "happy";
   if (isSleeping) {
     mood = "sleep";
+  } else if (isGrumpyAt(save, now)) {
+    mood = "grumpy";
   } else if (isSad(save.needs)) {
     mood = "sad";
   }
